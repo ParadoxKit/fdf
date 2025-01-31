@@ -161,7 +161,7 @@ namespace
 
 namespace fdf::detail
 {
-    int TestFile(std::string_view file, bool bInsideTestDir)
+    bool TestFile(std::string_view file, bool bInsideTestDir)
     {
         std::string inputFile, tokenizedFile, entriesFile, userTypesFile;
         ResolveDirectories(inputFile, tokenizedFile, entriesFile, userTypesFile, file, bInsideTestDir);
@@ -198,5 +198,5 @@ int main()
     newReadTest("Test_0");
     newReadTest("ProjectSpec");
 
-    return result;
+    return result? 0 : -1;
 }
