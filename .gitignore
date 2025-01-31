@@ -1,0 +1,48 @@
+
+# Generated folders
+_GEN/
+_PROJ/
+out/
+build/
+tests/output/
+
+
+
+# IDEs
+.vs/
+.idea/
+
+
+
+# Output files
+*.exe
+*.pdb
+*.dll
+*.obj
+*.o
+*.lib
+*.a
+*.dll
+*.so
+*.dylib
+*.dbg
+*.tmp
+*.log
+*.d
+*.dep
+
+
+
+# CMake
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+CMakeUserPresets.json
