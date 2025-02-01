@@ -190,8 +190,8 @@ namespace fdf::detail
 
         struct String
         {
-            char& operator[](size_t i)       noexcept  { return data[i]; }
-            char  operator[](size_t i) const noexcept  { return data[i]; }
+            constexpr char& operator[](size_t i)       noexcept  { return data[i]; }
+            constexpr char  operator[](size_t i) const noexcept  { return data[i]; }
 
             constexpr void Delete() noexcept
             {
@@ -280,7 +280,6 @@ namespace fdf::detail
         }
 
 
-
         constexpr Entry(const Entry& other) noexcept
             : type(other.type), subType(other.subType), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(other.fullIdentifier), comment(other.comment)
         {
@@ -289,7 +288,6 @@ namespace fdf::detail
             else
                 data = other.data;
         }
-
         constexpr Entry(Entry&& other) noexcept
             : type(other.type), subType(other.subType), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(std::move(other.fullIdentifier)), comment(std::move(other.comment))
         {
@@ -300,7 +298,6 @@ namespace fdf::detail
 
             other.type = Type::Invalid;
         }
-
 
 
         constexpr Entry& operator=(const Entry& other) noexcept
@@ -325,7 +322,6 @@ namespace fdf::detail
             }
             return *this;
         }
-
         constexpr Entry& operator=(Entry&& other) noexcept
         {
             if(this != &other)
@@ -364,60 +360,45 @@ namespace fdf::detail
         }
         constexpr std::string_view DataToView(std::string& temp) const noexcept
         {
-            if(type == Type::Invalid)
-                return NONE_TEXT;
-            if(type == Type::Null)
-                return NULL_TEXT;
-            if(type == Type::Array)
-                return ARRAY_TEXT;
-            if(type == Type::Map)
-                return MAP_TEXT;
-            if(type == Type::Bool)
-                return data.b[0]? TRUE_TEXT : FALSE_TEXT;
-
-            if(type == Type::String || type == Type::Hex || type == Type::Timestamp)
+            switch(type)
             {
-                if(size > VARIANT_SIZE - 1)
-                    return data.strDynamic.view.substr(0, size); 
-                return std::string_view(data.str, size);
+                case Type::Invalid: return NONE_TEXT;
+                case Type::Null:    return NULL_TEXT;
+                case Type::Array:   return ARRAY_TEXT;
+                case Type::Map:     return MAP_TEXT;
+                case Type::Bool:    return data.b[0]? TRUE_TEXT : FALSE_TEXT;
+
+                case Type::String:
+                case Type::Hex:
+                case Type::Timestamp:
+                    return size > VARIANT_SIZE - 1? data.strDynamic.view.substr(0, size) : std::string_view(data.str, size);
+
+                case Type::Version:
+                    temp = std::format("{}.{}.{}.{}", data.u[0], data.u[1], data.u[2], data.u[3]);
+                    return temp;
+
+                case Type::Int:
+                    temp = std::format("{}", data.i[0]);
+                    for(int i = 1; i < size; i++)
+                        temp = std::format("{}x{}", temp, data.i[i]);
+                    return temp;
+
+                case Type::UInt:
+                    temp = std::format("{}", data.u[0]);
+                    for(int i = 1; i < size; i++)
+                        temp = std::format("{}x{}", temp, data.u[i]);
+                    return temp;
+
+                case Type::Float:
+                    temp = std::format("{}", data.f[0]);
+                    for(int i = 1; i < size; i++)
+                        temp = std::format("{}x{}", temp, data.f[i]);
+                    return temp;
+
+                default:
+                    assert(false);
+                    return {};
             }
-
-            if(type == Type::Version)
-            {
-                temp = std::format("{}.{}.{}.{}", data.u[0], data.u[1], data.u[2], data.u[3]);
-                return temp;
-            }
-
-
-            if(type == Type::Int)
-            {
-                temp = std::format("{}", data.i[0]);
-                for(int i = 1; i < size; i++)
-                    temp = std::format("{}x{}", temp, data.i[i]);
-
-                return temp;
-            }
-
-            if(type == Type::UInt)
-            {
-                temp = std::format("{}", data.u[0]);
-                for(int i = 1; i < size; i++)
-                    temp = std::format("{}x{}", temp, data.u[i]);
-
-                return temp;
-            }
-
-            if(type == Type::Float)
-            {
-                temp = std::format("{}", data.f[0]);
-                for(int i = 1; i < size; i++)
-                    temp = std::format("{}x{}", temp, data.f[i]);
-
-                return temp;
-            }
-
-            assert(false);
-            return {};
         };
     };
 
@@ -533,38 +514,19 @@ namespace fdf::detail
     struct Tokenizer
     {
         constexpr Tokenizer(std::string_view content_) noexcept
-            : content(content_), index(0), currentToken(GetFirstToken())  { }
+            : content(content_), index(0), currentToken(GetNextToken())  { }
 
         constexpr void Reset(std::string_view content_) noexcept
         {
             content = content_;
             index = 0;
-            currentToken = GetFirstToken();
+            currentToken = GetNextToken();
         }
 
         constexpr Token Current() const noexcept  { return currentToken; }
         constexpr Token Advance()       noexcept  { currentToken = GetNextToken(); return currentToken; }
 
     private:
-        constexpr Token GetFirstToken() noexcept
-        {
-            /* Possible first tokens (excluding whitespace)
-            *  Identifier - any identifier
-            *  Keyword    - any keyword
-            *  Comment    - //
-            *  Comment    - /*
-            *  At         - @
-            *  NewLine    - \n
-            */
-
-            Token token = GetNextToken();
-            if(token.type == TokenType::Identifier || token.type == TokenType::Keyword || token.type == TokenType::Comment || token.type == TokenType::At || token.type == TokenType::NewLine || token.type == TokenType::EndOfFile)
-                return token;
-
-            return TokenType::Invalid;
-        }
-
-
         constexpr Token GetNextToken() noexcept
         {
             if(index >= content.size())
