@@ -193,17 +193,17 @@ namespace fdf::detail
             char& operator[](size_t i)       noexcept  { return data[i]; }
             char  operator[](size_t i) const noexcept  { return data[i]; }
 
-            void Delete() noexcept
+            constexpr void Delete() noexcept
             {
                 delete[] data;
                 capacity = 0;
             }
-            void Release() noexcept
+            constexpr void Release() noexcept
             {
                 data = nullptr;
                 capacity = 0;
             }
-            void Reserve(size_t size) noexcept
+            constexpr void Reserve(size_t size) noexcept
             {
                 char* newData = new char[size];
                 if(data != nullptr)
@@ -215,13 +215,13 @@ namespace fdf::detail
                 capacity = size;
                 RefreshView();
             }
-            void InitialAllocate(size_t size) noexcept
+            constexpr void InitialAllocate(size_t size) noexcept
             {
                 data = new char[size];
                 capacity = size;
                 RefreshView();
             }
-            String Copy() const noexcept
+            constexpr String Copy() const noexcept
             {
                 String other{};
                 if(capacity > 0 && data != nullptr)
@@ -233,13 +233,13 @@ namespace fdf::detail
 
                 return other;
             }
-            String Move() noexcept
+            constexpr String Move() noexcept
             {
                 String other = *this;
                 *this = {};
                 return other;
             }
-            void RefreshView() noexcept
+            constexpr void RefreshView() noexcept
             {
                 view = std::string_view(data, capacity);
             }
@@ -421,19 +421,6 @@ namespace fdf::detail
         };
     };
 
-    struct EntryWIP
-    {
-        Type type;
-        bool bContainsCurlyScopes;
-        bool bContainsSquareScopes;
-        bool bContainsString;
-        uint32_t scopeCount;
-        size_t startIndex;
-        size_t endIndex;
-        std::string_view identifier;
-        std::string_view value;
-    };
-
 
 
 
@@ -543,114 +530,20 @@ namespace fdf::detail
 
 
 
-    template<std::size_t CAPACITY>
-    struct TokenRingBuffer
-    {
-        static_assert(CAPACITY > 0, "RingBuffer capacity must be greater than 0!");
-        constexpr TokenRingBuffer() noexcept = default;
-        constexpr TokenRingBuffer(Token item) noexcept
-        {
-            assert(item.type != TokenType::NonExisting);
-            currentToken = item;
-        }
-
-        constexpr bool Add(Token item) noexcept
-        {
-            assert(item.type != TokenType::NonExisting && currentToken.type != TokenType::NonExisting);
-
-            if(IsFull())
-                return false;
-
-            this->operator[](size++) = (IsEmpty()? Current() : this->operator[](size - 1)).type == TokenType::EndOfFile? TokenType::EndOfFile : item;
-            return true;
-        }
-
-        constexpr void Advance(size_t count = 0) noexcept
-        {
-            assert(size != 0 && count <= size);
-            if(count == 0)
-                return;
-
-            currentToken = this->operator[](count - 1);
-
-            // TODO: Loop is not necessary, for development purposes only
-            for(size_t i = 0; i < count; i++)
-                this->operator[](i) = {};
-
-            size -= count;
-            current = (current + count) % CAPACITY;
-        }
-
-
-        constexpr Token& operator[](std::size_t index) noexcept
-        {
-            assert(index < size);
-            std::size_t actual_index = (current + index) % CAPACITY;
-            return buffer[actual_index];
-        }
-        constexpr Token operator[](std::size_t index) const noexcept
-        {
-            assert(index < size);
-            std::size_t actual_index = (current + index) % CAPACITY;
-            return buffer[actual_index];
-        }
-
-        constexpr Token& Current()       noexcept  { return currentToken; }
-        constexpr Token  Current() const noexcept  { return currentToken; }
-
-        constexpr bool    IsEmpty() const noexcept  { return size == 0; }
-        constexpr bool     IsFull() const noexcept  { return size == CAPACITY; }
-        constexpr size_t     Size() const noexcept  { return size; }
-        constexpr size_t Capacity() const noexcept  { return CAPACITY; }
-
-    private:
-        Token currentToken;
-        Token buffer[CAPACITY] = {};
-        size_t current = 0;
-        size_t size = 0;
-    };
-
-
     struct Tokenizer
     {
-        static constexpr size_t PREVIEW_TOKEN_COUNT = 10;
-
         constexpr Tokenizer(std::string_view content_) noexcept
-            : content(content_)
-        {
-            tokens = GetFirstToken();
-        }
+            : content(content_), index(0), currentToken(GetFirstToken())  { }
 
         constexpr void Reset(std::string_view content_) noexcept
         {
             content = content_;
             index = 0;
-            tokenIndex = 0;
-            tokens = GetFirstToken();
+            currentToken = GetFirstToken();
         }
 
-        constexpr Token Current() const           noexcept  { return tokens.Current(); }
-        constexpr void  Advance(size_t count = 1) noexcept  { tokens.Advance(count); }
-        constexpr Token PeekAndAdvance()          noexcept  { Peek(); Advance(); return Current(); }
-
-        constexpr Token Peek(size_t count = 1) noexcept
-        {
-            assert(count <= PREVIEW_TOKEN_COUNT);
-            if(count == 0)
-                return tokens.Current();
-
-            if(tokens.Size() > count)
-                return tokens[count - 1];
-
-            for(size_t i = tokens.Size(); i < count; i++)
-                tokens.Add(GetNextToken());
-
-            return tokens[count - 1];
-        }
-
-        constexpr bool          HasMoreTokens() const noexcept  { return tokens.IsEmpty()? tokens.Current().type != TokenType::EndOfFile : tokens[tokens.Size() - 1].type != TokenType::EndOfFile; }
-        constexpr size_t GetPreviewTokenCount() const noexcept  { return tokens.Size(); }
-        constexpr size_t             GetIndex() const noexcept  { return index; }
+        constexpr Token Current() const noexcept  { return currentToken; }
+        constexpr Token Advance()       noexcept  { currentToken = GetNextToken(); return currentToken; }
 
     private:
         constexpr Token GetFirstToken() noexcept
@@ -1100,9 +993,8 @@ namespace fdf::detail
 
     private:
         std::string_view content;
-        size_t index = 0;
-        size_t tokenIndex = 0;
-        TokenRingBuffer<PREVIEW_TOKEN_COUNT> tokens;
+        size_t index;
+        Token currentToken;
     };
 
 

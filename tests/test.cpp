@@ -81,7 +81,7 @@ namespace
         views.push_back(tokens[0].ToView(content));
         while(true)
         {
-            Token token = tokenizer.PeekAndAdvance();
+            Token token = tokenizer.Advance();
             tokens.push_back(token);
             views.push_back(token.ToView(content));
     
@@ -131,10 +131,7 @@ namespace
         std::string temp;
         for(const Entry& entry : entries)
         {
-            for(uint8_t i = 0; i < entry.depth; i++)
-                addToBuffer("    ");
-
-            addToBuffer(std::format("Type={}--Size={:03}--Name={:<20}--Value={:<50}--Comment={}", ENTRY_TYPE_TO_STRING[static_cast<size_t>(entry.type)], entry.size, entry.fullIdentifier, entry.DataToView(temp), entry.comment));
+            addToBuffer(std::format("{:<{}}Type={}--Size={:03}--Name={:<20}--Value={:<50}--Comment={}", "", 4 * entry.depth, ENTRY_TYPE_TO_STRING[static_cast<size_t>(entry.type)], entry.size, entry.fullIdentifier, entry.DataToView(temp), entry.comment));
             buffer.push_back('\n');
         }
 
@@ -159,17 +156,8 @@ namespace
         std::string inputFile, outputFile, tokenizedFile, entriesFile, userTypesFile;
     };
 
-    void ResolveDirectories(std::string& inputFile, std::string& tokenizedFile, std::string& entriesFile, std::string& userTypesFile, std::string_view inputFileNameWithoutExtension, bool bInsideTestDir)
-    {
-        if(bInsideTestDir)
-            inputFile  = std::format("{}/{}.txt", FDF_TEST_DIRECTORY, inputFileNameWithoutExtension);
-        else
-            inputFile = std::format("{}/designs/{}.txt", FDF_ROOT_DIRECTORY, inputFileNameWithoutExtension);
 
-        tokenizedFile = std::format("{}/output/{}-Tokenized.txt", FDF_TEST_DIRECTORY, inputFileNameWithoutExtension);
-        entriesFile   = std::format("{}/output/{}-Entries.txt",   FDF_TEST_DIRECTORY, inputFileNameWithoutExtension);
-        userTypesFile = std::format("{}/output/{}-UserTypes.txt", FDF_TEST_DIRECTORY, inputFileNameWithoutExtension);
-    }
+
 
     std::vector<TestDirectories> filesToTest;
     size_t longestFilename = 0;

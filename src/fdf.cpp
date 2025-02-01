@@ -7,11 +7,8 @@
 
 namespace fdf::detail
 {
-    #define FORWARD_RESULT(result) if(!(result)) return false
-
     #define CHECK_TOKEN(TOKEN)              if(TOKEN.type == TokenType::Invalid    ) return false
     #define CHECK_TOKEN_FOR_EOF(TOKEN)      if(TOKEN.type == TokenType::EndOfFile  ) return false
-    #define CHECK_TOKEN_NON_EXISTING(TOKEN) if(TOKEN.type == TokenType::NonExisting) return false
 
 
 
@@ -41,25 +38,29 @@ namespace fdf::detail
                     }
                 }
 
-                currentToken = tokenizer.PeekAndAdvance();
+                currentToken = tokenizer.Advance();
             }
 
             if(currentToken.type == TokenType::At)
             {
-                Token currentToken = tokenizer.PeekAndAdvance();
+                Token currentToken = tokenizer.Advance();
                 CHECK_TOKEN(currentToken);
                 CHECK_TOKEN_FOR_EOF(currentToken);
                 
                 if(currentToken.type != TokenType::Identifier)
                     return false;
 
-                FORWARD_RESULT(ParseUserType(content, tokenizer, userTypes, currentComment));
+                if(!ParseUserType(content, tokenizer, userTypes, currentComment))
+                    return false;
+
                 continue;
             }
 
             if(currentToken.type == TokenType::Identifier)
             {
-                FORWARD_RESULT(ParseVariable(content, tokenizer, entries, userTypes, currentComment, -1));
+                if(!ParseVariable(content, tokenizer, entries, userTypes, currentComment, -1))
+                    return false;
+
                 continue;
             }
             
@@ -84,7 +85,7 @@ namespace fdf::detail
         if(comment.type != TokenType::NonExisting)
             userType.comment = comment.ToView(content);
 
-        Token currentToken = tokenizer.PeekAndAdvance();
+        Token currentToken = tokenizer.Advance();
         CHECK_TOKEN(currentToken);
         CHECK_TOKEN_FOR_EOF(currentToken);
 
@@ -92,7 +93,7 @@ namespace fdf::detail
 
         if(currentToken.type == TokenType::Equal)
         {
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
             CHECK_TOKEN_FOR_EOF(currentToken);
         }
@@ -105,7 +106,7 @@ namespace fdf::detail
                 userType.comment = currentToken.ToView(content);
             }
 
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
             CHECK_TOKEN_FOR_EOF(currentToken);
         }
@@ -140,7 +141,7 @@ namespace fdf::detail
         {
             entry.fullIdentifier = currentToken.ToView(content);
             entry.identifierSize = entry.fullIdentifier.size();
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
         }
 
         CHECK_TOKEN(currentToken);
@@ -167,7 +168,7 @@ namespace fdf::detail
         size_t userTypeID = -1;
         if(currentToken.type == TokenType::Colon)
         {
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
             CHECK_TOKEN_FOR_EOF(currentToken);
 
@@ -200,7 +201,7 @@ namespace fdf::detail
             }
 
 
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
             CHECK_TOKEN_FOR_EOF(currentToken);
         }
@@ -211,7 +212,7 @@ namespace fdf::detail
         if(currentToken.type == TokenType::Equal)
         {
             bHasEqual = true;
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
             CHECK_TOKEN_FOR_EOF(currentToken);
         }
@@ -226,7 +227,7 @@ namespace fdf::detail
             }
 
             lastToken = currentToken;
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
             if(bHasEqual)
                 CHECK_TOKEN_FOR_EOF(currentToken);
@@ -253,233 +254,167 @@ namespace fdf::detail
     {
         Entry& entry = entries[entries.size() - 1];
 
-        if(typeID == 0)
-            return false;  // You can't use default value without specifying a type
-
-        if(typeID == 1)
+        switch(typeID)
         {
-            CopyEntryDeep(entries, userTypes, userTypeID);
-            return true;
+            case 0: return false;  // You can't use default value without specifying a type
+            case 1:
+                CopyEntryDeep(entries, userTypes, userTypeID);
+                return true;
+            case 3:
+                entry.type = Type::Bool;
+                entry.size = 1;
+                entry.data.b[0] = false;
+                return true;
+            case 4:
+                entry.type = Type::Int;
+                entry.size = 1;
+                entry.data.i[0] = 0;
+                return true;
+            case 5:
+                entry.type = Type::UInt;
+                entry.size = 1;
+                entry.data.u[0] = 0;
+                return true;
+            case 6:
+                entry.type = Type::Float;
+                entry.size = 1;
+                entry.data.f[0] = 0.0;
+                return true;
+            case 7:
+                entry.type = Type::Hex;
+                entry.size = 0;
+                entry.data.str[0] = '\0';
+                return true;
+            case 8:
+                entry.type = Type::Version;
+                entry.size = 3;
+                entry.data.u[0] = 1;
+                entry.data.u[1] = 0;
+                entry.data.u[2] = 0;
+                entry.data.u[3] = 0;
+                return true;
+            case 9:
+                entry.type = Type::String;
+                entry.size = 0;
+                entry.data.str[0] = '\0';
+                return true;
+            case 10:
+                entry.type = Type::Timestamp;
+                entry.size = 0;
+                entry.data.str[0] = '\0';
+                return true;
+            case 11:
+            case 16:
+                entry.type = Type::Int;
+                entry.size = 1;
+                entry.data.i[0] = 0;
+                return true;
+            case 12:
+            case 17:
+                entry.type = Type::Int;
+                entry.size = 2;
+                entry.data.i[0] = 0;
+                entry.data.i[1] = 0;
+                return true;
+            case 13:
+            case 18:
+                entry.type = Type::Int;
+                entry.size = 3;
+                entry.data.i[0] = 0;
+                entry.data.i[1] = 0;
+                entry.data.i[2] = 0;
+                return true;
+            case 14:
+            case 19:
+                entry.type = Type::Int;
+                entry.size = 4;
+                entry.data.i[0] = 0;
+                entry.data.i[1] = 0;
+                entry.data.i[2] = 0;
+                entry.data.i[3] = 0;
+                return true;
+            case 15:
+            case 20:
+                entry.type = Type::Int;
+                entry.size = 5;
+                entry.data.i[0] = 0;
+                entry.data.i[1] = 0;
+                entry.data.i[2] = 0;
+                entry.data.i[3] = 0;
+                entry.data.i[4] = 0;
+                return true;
+            case 21:
+                entry.type = Type::UInt;
+                entry.size = 1;
+                entry.data.u[0] = 0;
+                return true;
+            case 22:
+                entry.type = Type::UInt;
+                entry.size = 2;
+                entry.data.u[0] = 0;
+                entry.data.u[1] = 0;
+                return true;
+            case 23:
+                entry.type = Type::UInt;
+                entry.size = 3;
+                entry.data.u[0] = 0;
+                entry.data.u[1] = 0;
+                entry.data.u[2] = 0;
+                return true;
+            case 24:
+                entry.type = Type::UInt;
+                entry.size = 4;
+                entry.data.u[0] = 0;
+                entry.data.u[1] = 0;
+                entry.data.u[2] = 0;
+                entry.data.u[3] = 0;
+                return true;
+            case 25:
+                entry.type = Type::UInt;
+                entry.size = 5;
+                entry.data.u[0] = 0;
+                entry.data.u[1] = 0;
+                entry.data.u[2] = 0;
+                entry.data.u[3] = 0;
+                entry.data.u[4] = 0;
+                return true;
+            case 26:
+                entry.type = Type::Float;
+                entry.size = 1;
+                entry.data.f[0] = 0;
+                return true;
+            case 27:
+                entry.type = Type::Float;
+                entry.size = 2;
+                entry.data.f[0] = 0;
+                entry.data.f[1] = 0;
+                return true;
+            case 28:
+                entry.type = Type::Float;
+                entry.size = 3;
+                entry.data.f[0] = 0;
+                entry.data.f[1] = 0;
+                entry.data.f[2] = 0;
+                return true;
+            case 29:
+                entry.type = Type::Float;
+                entry.size = 4;
+                entry.data.f[0] = 0;
+                entry.data.f[1] = 0;
+                entry.data.f[2] = 0;
+                entry.data.f[3] = 0;
+                return true;
+            case 30:
+                entry.type = Type::Float;
+                entry.size = 5;
+                entry.data.f[0] = 0;
+                entry.data.f[1] = 0;
+                entry.data.f[2] = 0;
+                entry.data.f[3] = 0;
+                entry.data.f[4] = 0;
+                return true;
+            default: return false;  // Something we didn't process yet?
         }
-
-        if(typeID == 3)
-        {
-            entry.type = Type::Bool;
-            entry.size = 1;
-            entry.data.b[0] = false;
-            return true;
-        }
-
-        if(typeID == 4)
-        {
-            entry.type = Type::Int;
-            entry.size = 1;
-            entry.data.i[0] = 0;
-            return true;
-        }
-
-        if(typeID == 5)
-        {
-            entry.type = Type::UInt;
-            entry.size = 1;
-            entry.data.u[0] = 0;
-            return true;
-        }
-
-        if(typeID == 6)
-        {
-            entry.type = Type::Float;
-            entry.size = 1;
-            entry.data.f[0] = 0.0;
-            return true;
-        }
-
-        if(typeID == 7)
-        {
-            entry.type = Type::Hex;
-            entry.size = 0;
-            entry.data.str[0] = '\0';
-            return true;
-        }
-
-        if(typeID == 8)
-        {
-            entry.type = Type::Version;
-            entry.size = 3;
-            entry.data.u[0] = 1;
-            entry.data.u[1] = 0;
-            entry.data.u[2] = 0;
-            entry.data.u[3] = 0;
-            return true;
-        }
-
-        if(typeID == 9)
-        {
-            entry.type = Type::String;
-            entry.size = 0;
-            entry.data.str[0] = '\0';
-            return true;
-        }
-
-        if(typeID == 10)
-        {
-            entry.type = Type::Timestamp;
-            entry.size = 0;
-            entry.data.str[0] = '\0';
-            return true;
-        }
-
-        if(typeID == 11 || typeID == 16)
-        {
-            entry.type = Type::Int;
-            entry.size = 1;
-            entry.data.i[0] = 0;
-            return true;
-        }
-
-        if(typeID == 12 || typeID == 17)
-        {
-            entry.type = Type::Int;
-            entry.size = 2;
-            entry.data.i[0] = 0;
-            entry.data.i[1] = 0;
-            return true;
-        }
-
-        if(typeID == 13 || typeID == 18)
-        {
-            entry.type = Type::Int;
-            entry.size = 3;
-            entry.data.i[0] = 0;
-            entry.data.i[1] = 0;
-            entry.data.i[2] = 0;
-            return true;
-        }
-
-        if(typeID == 14 || typeID == 19) 
-        {
-            entry.type = Type::Int;
-            entry.size = 4;
-            entry.data.i[0] = 0;
-            entry.data.i[1] = 0;
-            entry.data.i[2] = 0;
-            entry.data.i[3] = 0;
-            return true;
-        }
-
-        if(typeID == 15 || typeID == 20)
-        {
-            entry.type = Type::Int;
-            entry.size = 5;
-            entry.data.i[0] = 0;
-            entry.data.i[1] = 0;
-            entry.data.i[2] = 0;
-            entry.data.i[3] = 0;
-            entry.data.i[4] = 0;
-            return true;
-        }
-
-        if(typeID == 21)
-        {
-            entry.type = Type::UInt;
-            entry.size = 1;
-            entry.data.u[0] = 0;
-            return true;
-        }
-
-        if(typeID == 22)
-        {
-            entry.type = Type::UInt;
-            entry.size = 2;
-            entry.data.u[0] = 0;
-            entry.data.u[1] = 0;
-            return true;
-        }
-
-        if(typeID == 23)
-        {
-            entry.type = Type::UInt;
-            entry.size = 3;
-            entry.data.u[0] = 0;
-            entry.data.u[1] = 0;
-            entry.data.u[2] = 0;
-            return true;
-        }
-
-        if(typeID == 24)
-        {
-            entry.type = Type::UInt;
-            entry.size = 4;
-            entry.data.u[0] = 0;
-            entry.data.u[1] = 0;
-            entry.data.u[2] = 0;
-            entry.data.u[3] = 0;
-            return true;
-        }
-
-        if(typeID == 25)
-        {
-            entry.type = Type::UInt;
-            entry.size = 5;
-            entry.data.u[0] = 0;
-            entry.data.u[1] = 0;
-            entry.data.u[2] = 0;
-            entry.data.u[3] = 0;
-            entry.data.u[4] = 0;
-            return true;
-        }
-
-        if(typeID == 26)
-        {
-            entry.type = Type::Float;
-            entry.size = 1;
-            entry.data.f[0] = 0;
-            return true;
-        }
-
-        if(typeID == 27)
-        {
-            entry.type = Type::Float;
-            entry.size = 2;
-            entry.data.f[0] = 0;
-            entry.data.f[1] = 0;
-            return true;
-        }
-
-        if(typeID == 28)
-        {
-            entry.type = Type::Float;
-            entry.size = 3;
-            entry.data.f[0] = 0;
-            entry.data.f[1] = 0;
-            entry.data.f[2] = 0;
-            return true;
-        }
-
-        if(typeID == 29)
-        {
-            entry.type = Type::Float;
-            entry.size = 4;
-            entry.data.f[0] = 0;
-            entry.data.f[1] = 0;
-            entry.data.f[2] = 0;
-            entry.data.f[3] = 0;
-            return true;
-        }
-
-        if(typeID == 30)
-        {
-            entry.type = Type::Float;
-            entry.size = 5;
-            entry.data.f[0] = 0;
-            entry.data.f[1] = 0;
-            entry.data.f[2] = 0;
-            entry.data.f[3] = 0;
-            entry.data.f[4] = 0;
-            return true;
-        }
-
-        return false;  // Something we didn't process yet?
     }
 
 
@@ -492,16 +427,16 @@ namespace fdf::detail
 
         auto postProcess = [&]()
         {
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
             if(currentToken.type == TokenType::Comment)
             {
                 // TODO: Maybe warn, if already has a comment?
                 entry.comment = currentToken.ToView(content);
-                currentToken = tokenizer.PeekAndAdvance();
+                currentToken = tokenizer.Advance();
             }
 
             if(currentToken.type == TokenType::NewLine)
-                tokenizer.PeekAndAdvance();
+                tokenizer.Advance();
         };
         
         if(currentToken.type == TokenType::Keyword)
@@ -894,7 +829,7 @@ namespace fdf::detail
         size_t entryID = entries.size() - 1;
         entries[entryID].type = Type::Array;
 
-        Token currentToken = tokenizer.PeekAndAdvance();
+        Token currentToken = tokenizer.Advance();
         CHECK_TOKEN(currentToken);
         CHECK_TOKEN_FOR_EOF(currentToken);
 
@@ -906,13 +841,13 @@ namespace fdf::detail
                 if(currentToken.type == TokenType::Comment)
                 {
                     comment = currentToken;
-                    currentToken = tokenizer.PeekAndAdvance();
+                    currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                 }
                 else
                 {
-                    currentToken = tokenizer.PeekAndAdvance();
+                    currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                     continue;
@@ -927,13 +862,13 @@ namespace fdf::detail
                 currentToken = tokenizer.Current();
                 if(currentToken.type == TokenType::Comma)
                 {
-                    currentToken = tokenizer.PeekAndAdvance();
+                    currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                 }
                 if(currentToken.type == TokenType::NewLine)
                 {
-                    currentToken = tokenizer.PeekAndAdvance();
+                    currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                 }
@@ -944,12 +879,12 @@ namespace fdf::detail
 
         if(currentToken.type == TokenType::SquareBraceClose)
         {
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
 
             if(currentToken.type == TokenType::NewLine)
             {
-                currentToken = tokenizer.PeekAndAdvance();
+                currentToken = tokenizer.Advance();
                 CHECK_TOKEN(currentToken);
             }
             return true;
@@ -969,7 +904,7 @@ namespace fdf::detail
         if(typeID == 1)
             CopyEntryDeep(entries, userTypes, userTypeID);
 
-        Token currentToken = tokenizer.PeekAndAdvance();
+        Token currentToken = tokenizer.Advance();
         CHECK_TOKEN(currentToken);
         CHECK_TOKEN_FOR_EOF(currentToken);
 
@@ -981,13 +916,13 @@ namespace fdf::detail
                 if(currentToken.type == TokenType::Comment)
                 {
                     comment = currentToken;
-                    currentToken = tokenizer.PeekAndAdvance();
+                    currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                 }
                 else
                 {
-                    currentToken = tokenizer.PeekAndAdvance();
+                    currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                     continue;
@@ -1003,13 +938,13 @@ namespace fdf::detail
                 currentToken = tokenizer.Current();
                 if(currentToken.type == TokenType::Comma)
                 {
-                    currentToken = tokenizer.PeekAndAdvance();
+                    currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                 }
                 if(currentToken.type == TokenType::NewLine)
                 {
-                    currentToken = tokenizer.PeekAndAdvance();
+                    currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                 }
@@ -1020,12 +955,12 @@ namespace fdf::detail
 
         if(currentToken.type == TokenType::CurlyBraceClose)
         {
-            currentToken = tokenizer.PeekAndAdvance();
+            currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
 
             if(currentToken.type == TokenType::NewLine)
             {
-                currentToken = tokenizer.PeekAndAdvance();
+                currentToken = tokenizer.Advance();
                 CHECK_TOKEN(currentToken);
             }
             return true;
