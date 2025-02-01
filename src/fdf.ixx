@@ -11,7 +11,7 @@ extern "C++"
         #pragma clang diagnostic ignored "-Winclude-angled-in-module-purview"
     #elif defined(_MSC_VER)
         #pragma warning(push)
-        #pragma warning(disable : 5244) // Including header in the purview of module 'fastgltf' appears erroneous.
+        #pragma warning(disable : 5244)
     #endif
     
 

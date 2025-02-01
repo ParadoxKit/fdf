@@ -143,6 +143,22 @@ namespace
             outfile << buffer;
     }
 
+    struct TestDirectories
+    {
+        TestDirectories(const std::filesystem::path& file)
+        {
+            inputFile = file.generic_string();
+            outputFile = FDF_TEST_DIRECTORY "/output/" + file.stem().generic_string();
+            
+            tokenizedFile = outputFile + "-Tokenized.txt";
+            entriesFile   = outputFile + "-Entries.txt";
+            userTypesFile = outputFile + "-UserTypes.txt";
+            outputFile    = outputFile + "-Output.txt";
+        }
+
+        std::string inputFile, outputFile, tokenizedFile, entriesFile, userTypesFile;
+    };
+
     void ResolveDirectories(std::string& inputFile, std::string& tokenizedFile, std::string& entriesFile, std::string& userTypesFile, std::string_view inputFileNameWithoutExtension, bool bInsideTestDir)
     {
         if(bInsideTestDir)
@@ -154,6 +170,9 @@ namespace
         entriesFile   = std::format("{}/output/{}-Entries.txt",   FDF_TEST_DIRECTORY, inputFileNameWithoutExtension);
         userTypesFile = std::format("{}/output/{}-UserTypes.txt", FDF_TEST_DIRECTORY, inputFileNameWithoutExtension);
     }
+
+    std::vector<TestDirectories> filesToTest;
+    size_t longestFilename = 0;
 }
 
 
@@ -161,17 +180,32 @@ namespace
 
 namespace fdf::detail
 {
-    bool TestFile(std::string_view file, bool bInsideTestDir)
+    using namespace std::chrono_literals;
+
+    bool TestFiles()
     {
-        std::string inputFile, tokenizedFile, entriesFile, userTypesFile;
-        ResolveDirectories(inputFile, tokenizedFile, entriesFile, userTypesFile, file, bInsideTestDir);
+        bool bResult = true;
+        for(size_t i = 0; i < filesToTest.size(); i++)
+        {
+            const TestDirectories& directories = filesToTest[i];
+            std::cout << std::format("[{:02}/{:02}] {:<{}}", i + 1, filesToTest.size(), directories.inputFile, longestFilename);
 
-        PrintAllTokens(inputFile, tokenizedFile);
-        Reader reader = Reader(std::filesystem::path(inputFile));
-        PrintAllEntries(reader.entries, entriesFile);
-        PrintAllEntries(reader.userTypes, userTypesFile);
+            auto startTime = std::chrono::high_resolution_clock::now();
+            Reader reader = Reader(std::filesystem::path(directories.inputFile));
+            auto endTime = std::chrono::high_resolution_clock::now();
+            auto duration = duration_cast<std::chrono::microseconds>(endTime - startTime);
 
-        return reader.IsValid()? true : false;
+            std::string durationString = std::format("{:.5f}ms", duration.count() / 1'000.0);
+            std::cout << std::format(" -- Result: {:<7} -- Took: {:<9}\n", reader.IsValid()? "SUCCESS" : "FAIL", durationString);
+            
+            PrintAllTokens(directories.inputFile, directories.tokenizedFile);
+            PrintAllEntries(reader.entries, directories.entriesFile);
+            PrintAllEntries(reader.userTypes, directories.userTypesFile);
+
+            bResult = bResult && reader.IsValid();
+        }
+
+        return bResult;
     }
 }
 
@@ -180,23 +214,27 @@ namespace fdf::detail
 
 int main()
 {
+    std::filesystem::path currentDesignFile = FDF_ROOT_DIRECTORY "/designs/Design_4.txt";
+    std::filesystem::path testDir = FDF_TEST_DIRECTORY;
     std::filesystem::path outputDir = FDF_TEST_DIRECTORY "/output";
+    bool result = true;
+
     if(!std::filesystem::exists(outputDir))
         std::filesystem::create_directory(outputDir);
 
-    bool result = true;
-    auto newReadTest = [&](std::string_view file, bool bInsideTestDir = true)
+    if(std::filesystem::exists(currentDesignFile))
+        filesToTest.emplace_back(std::move(currentDesignFile));
+    
+    for(const auto& entry : std::filesystem::directory_iterator(testDir))
     {
-        bool newResult = fdf::detail::TestFile(file, bInsideTestDir);
-        if(!newResult)
-            std::cout << std::format("\n\nERROR: TestFailed: {}/{}.txt\n\n", bInsideTestDir? "tests" : "designs", file);
+        if(entry.is_regular_file() && entry.path().stem() != "CMakeLists" && (entry.path().extension() == ".txt" || entry.path().extension() == ".fdf"))
+        {
+            size_t length = filesToTest.emplace_back(entry.path()).inputFile.size();
+            if(length > longestFilename)
+                longestFilename = length;
+        }
+    }
 
-        result = result && newResult;
-    };
-
-    newReadTest("Design_4", false);
-    newReadTest("Test_0");
-    newReadTest("ProjectSpec");
-
-    return result? 0 : -1;
+    std::cout << std::format("Testing fdf files -- Found {} files\n\n", filesToTest.size());
+    return TestFiles()? 0 : -1;
 }

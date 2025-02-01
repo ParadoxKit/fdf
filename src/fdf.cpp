@@ -1084,6 +1084,7 @@ namespace fdf::detail
             else
             {
                 // TODO: handle Array and Map
+                // TODO: Just override every child and their childs and so on... Don't bother with merging or something like that
                 return false;
             }
         }

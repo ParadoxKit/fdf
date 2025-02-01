@@ -1121,7 +1121,7 @@ namespace fdf::detail
     size_t FindEntryDeep(std::vector<Entry>& entries, std::string_view fullIdentifier, size_t depth = 0, size_t startIndex = 0);
     bool OverrideEntry(std::vector<Entry>& entries, size_t targetID, size_t sourceID);
 
-    bool TestFile(std::string_view file, bool bInsideTestDir);
+    bool TestFiles();
 }
 
 
@@ -1142,7 +1142,7 @@ FDF_EXPORT namespace fdf
     class Reader
     {
         friend class Writer;
-        friend bool detail::TestFile(std::string_view file, bool bInsideTestDir);
+        friend bool detail::TestFiles();
     public:
         Reader(std::string_view content) noexcept;
         Reader(std::filesystem::path filepath) noexcept;
