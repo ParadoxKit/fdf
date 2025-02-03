@@ -168,8 +168,6 @@ namespace
 
 namespace fdf::detail
 {
-    using namespace std::chrono_literals;
-
     bool TestFiles()
     {
         bool bResult = true;
@@ -181,9 +179,9 @@ namespace fdf::detail
             auto startTime = std::chrono::high_resolution_clock::now();
             Reader reader = Reader(std::filesystem::path(directories.inputFile));
             auto endTime = std::chrono::high_resolution_clock::now();
-            auto duration = duration_cast<std::chrono::microseconds>(endTime - startTime);
+            auto duration = duration_cast<std::chrono::nanoseconds>(endTime - startTime);
 
-            std::string durationString = std::format("{:.5f}ms", duration.count() / 1'000.0);
+            std::string durationString = std::format("{:.6f}ms", duration.count() / 1'000'000.0);
             std::cout << std::format(" -- Result: {:<7} -- Took: {:<9}\n", reader.IsValid()? "SUCCESS" : "FAIL", durationString);
             
             PrintAllTokens(directories.inputFile, directories.tokenizedFile);

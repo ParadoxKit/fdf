@@ -79,6 +79,8 @@ namespace fdf::detail
     bool ParseUserType(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& userTypes, Token comment)
     {
         Entry& userType = userTypes.emplace_back();
+        size_t currentUserTypeIndex = userTypes.size() - 1;
+
         userType.fullIdentifier = tokenizer.Current().ToView(content);
         userType.identifierSize = userType.fullIdentifier.size();
 
@@ -114,7 +116,7 @@ namespace fdf::detail
 
 
         if(currentToken.type == TokenType::CurlyBraceOpen)
-            return ParseMap(content, tokenizer, userTypes, userTypes, 0, -1);
+            return ParseMap(content, tokenizer, userTypes, userTypes, -1, currentUserTypeIndex) && OverrideEntry(userTypes, FindEntry(userTypes, userTypes[currentUserTypeIndex].fullIdentifier, userTypes[currentUserTypeIndex].depth, 0), currentUserTypeIndex);
 
         return false;
     }
@@ -122,7 +124,7 @@ namespace fdf::detail
 
 
 
-    bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, Token comment, size_t parentEntryIndex)
+    bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, Token comment, size_t parentEntryIndex, size_t currentlyProcessedUserTypeID)
     {
         const bool bHasParent    = parentEntryIndex != -1;
         const bool bArrayElement = bHasParent? entries[parentEntryIndex].type == Type::Array : false;
@@ -164,7 +166,6 @@ namespace fdf::detail
         
 
 
-        uint8_t typeID = 0;  // 0 is unspecified, 1 is user type, 2 is not used, 3 and above KeywordID which points to a builtin type
         size_t userTypeID = -1;
         if(currentToken.type == TokenType::Colon)
         {
@@ -174,13 +175,13 @@ namespace fdf::detail
 
             if(currentToken.type == TokenType::Keyword) // Builtin type (can still be Array or Map)
             {
-                typeID = currentToken.extra8;
-                if(typeID <= 2)
+                entry.typeID = currentToken.extra8;
+                if(entry.typeID <= 2)
                     return false;  // These are value keywords, not types
             }
             else if(currentToken.type == TokenType::Identifier) // User type (Array or Map)
             {
-                typeID = 1;
+                entry.typeID = 1;
 
                 std::string_view userTypeName = currentToken.ToView(content);
                 for(size_t i = 0; i < userTypes.size(); i++)
@@ -194,6 +195,9 @@ namespace fdf::detail
 
                 if(userTypeID == -1)
                     return false;  // We didn't found the requested user type
+
+                if(userTypeID == currentlyProcessedUserTypeID)
+                    return false;  // Infinite recursion
             }
             else
             {
@@ -236,13 +240,13 @@ namespace fdf::detail
 
 
         if(IsValueLiteral(currentToken.type))
-            return ParseSimpleValue(content, tokenizer, entry, typeID) && OverrideEntry(entries, FindEntryDeep(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+            return ParseSimpleValue(content, tokenizer, entry) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
         if(currentToken.type == TokenType::CurlyBraceOpen)
-            return ParseMap(content, tokenizer, entries, userTypes, typeID, userTypeID) && OverrideEntry(entries, FindEntryDeep(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+            return ParseMap(content, tokenizer, entries, userTypes, userTypeID) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
         if(currentToken.type == TokenType::SquareBraceOpen)
-            return ParseArray(content, tokenizer, entries, userTypes, typeID, userTypeID) && OverrideEntry(entries, FindEntryDeep(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+            return ParseArray(content, tokenizer, entries, userTypes, userTypeID) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
         if(!bHasEqual && lastToken.type == TokenType::NewLine)
-            return ParseDefaultValue(content, tokenizer, entries, userTypes, typeID, userTypeID) && OverrideEntry(entries, FindEntryDeep(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+            return ParseDefaultValue(content, tokenizer, entries, userTypes, userTypeID) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
 
         return false;  // Something we didn't process yet?
     }
@@ -250,11 +254,11 @@ namespace fdf::detail
 
 
 
-    bool ParseDefaultValue(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, uint8_t typeID, size_t userTypeID)
+    bool ParseDefaultValue(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, size_t userTypeID)
     {
         Entry& entry = entries[entries.size() - 1];
 
-        switch(typeID)
+        switch(entry.typeID)
         {
             case 0: return false;  // You can't use default value without specifying a type
             case 1:
@@ -420,7 +424,7 @@ namespace fdf::detail
 
 
 
-    bool ParseSimpleValue(std::string_view content, Tokenizer& tokenizer, Entry& entry, uint8_t typeID)
+    bool ParseSimpleValue(std::string_view content, Tokenizer& tokenizer, Entry& entry)
     {
         Token currentToken = tokenizer.Current();
         std::string_view view = currentToken.ToView(content);
@@ -443,10 +447,7 @@ namespace fdf::detail
         {
             if(currentToken.extra8 == 0)
             {
-                // We could use this if we are gonna allow null value for explicitly specified types (since type will be array or Map)
-                // entry.subType = Type::Null;
-
-                if(typeID == 0)
+                if(entry.typeID == 0)
                 {
                     entry.type = Type::Null;
                     postProcess();
@@ -467,8 +468,8 @@ namespace fdf::detail
             return false;  // Invalid keyword when expected a value
         }
 
-        if(typeID == 1)
-            return false;
+        if(entry.typeID == 1)
+            return false;  // User type cannot have a simple value literal
 
         entry.size = currentToken.extra8;  // Dimension count or string length
 
@@ -824,7 +825,7 @@ namespace fdf::detail
 
 
 
-    bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, uint8_t typeID, size_t userTypeID)
+    bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, size_t userTypeID)
     {
         size_t entryID = entries.size() - 1;
         entries[entryID].type = Type::Array;
@@ -839,20 +840,13 @@ namespace fdf::detail
             while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
             {
                 if(currentToken.type == TokenType::Comment)
-                {
                     comment = currentToken;
-                    currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
-                }
-                else
-                {
-                    currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
-                    continue;
-                }
+
+                currentToken = tokenizer.Advance();
+                CHECK_TOKEN(currentToken);
+                CHECK_TOKEN_FOR_EOF(currentToken);
             }
+
 
             if(IsValueLiteral(currentToken.type) || currentToken.type == TokenType::CurlyBraceOpen || currentToken.type == TokenType::SquareBraceOpen || currentToken.type == TokenType::Colon)
             {
@@ -866,42 +860,33 @@ namespace fdf::detail
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                 }
+            }
+            else if(currentToken.type == TokenType::SquareBraceClose)
+            {
+                currentToken = tokenizer.Advance();
+                CHECK_TOKEN(currentToken);
+
                 if(currentToken.type == TokenType::NewLine)
                 {
                     currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
                 }
-                continue;
+                return true;
             }
-            break;
+            else
+                return false;
         }
-
-        if(currentToken.type == TokenType::SquareBraceClose)
-        {
-            currentToken = tokenizer.Advance();
-            CHECK_TOKEN(currentToken);
-
-            if(currentToken.type == TokenType::NewLine)
-            {
-                currentToken = tokenizer.Advance();
-                CHECK_TOKEN(currentToken);
-            }
-            return true;
-        }
-
-        return false;
     }
 
 
 
 
-    bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, uint8_t typeID, size_t userTypeID)
+    bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, size_t userTypeID, size_t currentlyProcessedUserTypeID)
     {
         size_t entryID = entries.size() - 1;
         entries[entryID].type = Type::Map;
 
-        if(typeID == 1)
+        if(entries[entryID].typeID == 1)
             CopyEntryDeep(entries, userTypes, userTypeID);
 
         Token currentToken = tokenizer.Advance();
@@ -914,25 +899,17 @@ namespace fdf::detail
             while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
             {
                 if(currentToken.type == TokenType::Comment)
-                {
                     comment = currentToken;
-                    currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
-                }
-                else
-                {
-                    currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
-                    continue;
-                }
+
+                currentToken = tokenizer.Advance();
+                CHECK_TOKEN(currentToken);
+                CHECK_TOKEN_FOR_EOF(currentToken);
             }
 
-            auto currentView = currentToken.ToView(content);
+
             if(currentToken.type == TokenType::Identifier)
             {
-                if(!ParseVariable(content, tokenizer, entries, userTypes, comment, entryID))
+                if(!ParseVariable(content, tokenizer, entries, userTypes, comment, entryID, currentlyProcessedUserTypeID))
                     return false;
 
                 currentToken = tokenizer.Current();
@@ -942,55 +919,28 @@ namespace fdf::detail
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                 }
+            }
+            else if(currentToken.type == TokenType::CurlyBraceClose)
+            {
+                currentToken = tokenizer.Advance();
+                CHECK_TOKEN(currentToken);
+
                 if(currentToken.type == TokenType::NewLine)
                 {
                     currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
                 }
-                continue;
+                return true;
             }
-            break;
+            else
+                return false;
         }
-
-        if(currentToken.type == TokenType::CurlyBraceClose)
-        {
-            currentToken = tokenizer.Advance();
-            CHECK_TOKEN(currentToken);
-
-            if(currentToken.type == TokenType::NewLine)
-            {
-                currentToken = tokenizer.Advance();
-                CHECK_TOKEN(currentToken);
-            }
-            return true;
-        }
-
-        return false;
     }
 
 
 
 
-    void CopyEntryDeep(std::vector<Entry>& target, const std::vector<Entry>& source, size_t sourceID)
-    {
-        size_t targetParentID = target.size() - 1;
-        const Entry& sourceParent = source[sourceID];
-
-        target[targetParentID].type = sourceParent.type;
-        target[targetParentID].size = sourceParent.size;
-
-        for(size_t i = 0; i < sourceParent.size; i++)
-        {
-            const size_t index = sourceID + i + 1;
-            Entry& last = target.emplace_back(source[index]);
-            last.fullIdentifier = std::format("{}{}", target[targetParentID].fullIdentifier, source[index].GetIdentifierWithDot());
-            if(last.type == Type::Array || last.type == Type::Map)
-                CopyEntryDeep(target, source, index);
-        }
-    }
-
-    size_t FindEntryDeep(std::vector<Entry>& entries, std::string_view fullIdentifier, size_t depth, size_t startIndex)
+    size_t FindEntry(std::vector<Entry>& entries, std::string_view fullIdentifier, size_t depth, size_t startIndex)
     {
         for(size_t i = startIndex; i < entries.size(); i++)
         {
@@ -1001,10 +951,26 @@ namespace fdf::detail
         return -1;
     }
 
+    void CopyEntryDeep(std::vector<Entry>& target, const std::vector<Entry>& source, size_t sourceID)
+    {
+        size_t targetID = target.size() - 1;
+
+        target[targetID].type = source[sourceID].type;
+        target[targetID].size = source[sourceID].size;
+
+        for(size_t i = 0; i < source[sourceID].size; i++)
+        {
+            const size_t index = sourceID + i + 1;
+            Entry& last = target.emplace_back(source[index]);
+            last.depth += target[targetID].depth;
+            last.fullIdentifier = std::format("{}{}", target[targetID].fullIdentifier, source[index].GetIdentifierWithDot());
+            if(last.type == Type::Array || last.type == Type::Map)
+                CopyEntryDeep(target, source, index);
+        }
+    }
+
     bool OverrideEntry(std::vector<Entry>& entries, size_t targetID, size_t sourceID)
     {
-        Entry& target = entries[targetID];
-        Entry& source = entries[sourceID];
         if(targetID == sourceID)
             return true;
 

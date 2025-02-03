@@ -44,8 +44,14 @@ var18:int=-15x-20x30
     fullscreen:bool=false
     hudScale=0.75
 }
+@GameData
+{
+    health=100
+    settings:GameSettings
+    bar=2,
+}
 
-var19:GameSettings{ }
+var19:GameData{ health=15 }
 var20:GameSettings
 var21:GameSettings
 {

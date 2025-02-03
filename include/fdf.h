@@ -203,25 +203,40 @@ namespace fdf::detail
                 data = nullptr;
                 capacity = 0;
             }
-            constexpr void Reserve(size_t size) noexcept
+            void Reserve(size_t newCapacity) noexcept
             {
-                char* newData = new char[size];
+                if(newCapacity <= capacity)
+                    return;
+
+                char* newData = new char[newCapacity];
                 if(data != nullptr)
                 {
                     memcpy(newData, data, capacity);
                     delete[] data;
                 }
                 data = newData;
-                capacity = size;
+                capacity = newCapacity;
                 RefreshView();
             }
-            constexpr void InitialAllocate(size_t size) noexcept
+            constexpr void InitialAllocate(size_t newCapacity) noexcept
             {
-                data = new char[size];
-                capacity = size;
+                data = new char[newCapacity];
+                capacity = newCapacity;
                 RefreshView();
             }
-            constexpr String Copy() const noexcept
+            void Reallocate(size_t newCapacity) noexcept
+            {
+                size_t smallest = newCapacity > capacity? capacity : newCapacity;
+                char* newData = new char[capacity];
+
+                memcpy(newData, data, smallest);
+                delete[] data;
+
+                data = newData;
+                capacity = newCapacity;
+                RefreshView();
+            }
+            String Copy() const noexcept
             {
                 String other{};
                 if(capacity > 0 && data != nullptr)
@@ -260,12 +275,10 @@ namespace fdf::detail
     struct Entry
     {
         Type type = Type::Invalid;
-        Type subType = Type::Invalid;  // Subtype for Array and Map
-        uint8_t depth = 0; // depth of the entry (0 for top level, 1 for child of top level, 2 for grandchild of top level, ...)
+        uint8_t typeID = 0; // Explicitly specified type ID (0 for not specified, 1 for user type, 2 is unused and rest is builtin types)
+        uint8_t depth = 0;  // Depth of the entry (0 for top level, 1 for child of top level, 2 for grandchild of top level, ...)
         uint8_t identifierSize = 0;
-        // uint16_t fullIdentifierSize = 0;  // From old implementation where we manage our own memory
-        uint32_t size = 0; // If Array or Map this is count of top level childs, otherwise type specific (for example: character count for string)
-        //void* data = nullptr;              // From old implementation where we manage our own memory
+        uint32_t size = 0;  // If Array or Map this is count of top level childs, otherwise type specific (for example: character count for string)
 
         std::string fullIdentifier;
         std::string comment;
@@ -281,7 +294,7 @@ namespace fdf::detail
 
 
         constexpr Entry(const Entry& other) noexcept
-            : type(other.type), subType(other.subType), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(other.fullIdentifier), comment(other.comment)
+            : type(other.type), typeID(other.typeID), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(other.fullIdentifier), comment(other.comment)
         {
             if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
                 data.strDynamic = other.data.strDynamic.Copy();
@@ -289,7 +302,7 @@ namespace fdf::detail
                 data = other.data;
         }
         constexpr Entry(Entry&& other) noexcept
-            : type(other.type), subType(other.subType), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(std::move(other.fullIdentifier)), comment(std::move(other.comment))
+            : type(other.type), typeID(other.typeID), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(std::move(other.fullIdentifier)), comment(std::move(other.comment))
         {
             if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
                 data.strDynamic = other.data.strDynamic.Move();
@@ -305,7 +318,7 @@ namespace fdf::detail
             if(this != &other)
             {
                 type = other.type;
-                subType = other.subType;
+                typeID = other.typeID;
                 depth = other.depth;
                 identifierSize = other.identifierSize;
                 size = other.size;
@@ -327,7 +340,7 @@ namespace fdf::detail
             if(this != &other)
             {
                 type = other.type;
-                subType = other.subType;
+                typeID = other.typeID;
                 depth = other.depth;
                 identifierSize = other.identifierSize;
                 size = other.size;
@@ -497,7 +510,6 @@ namespace fdf::detail
         constexpr Token(TokenType type_, size_t startPosition_ = 0, size_t count_ = 0)
             : type(type_), startPosition(startPosition_), count(count_)  { }
 
-        constexpr std::string_view ToView(const char* buffer)      const noexcept  { return std::string_view(buffer + startPosition, count); }
         constexpr std::string_view ToView(std::string_view buffer) const noexcept  { return buffer.substr(startPosition, count); }
 
         TokenType type = TokenType::NonExisting;
@@ -659,7 +671,7 @@ namespace fdf::detail
                     return token;
                 }
 
-                return TokenType::Invalid; // Random dollar sign without "{"
+                return TokenType::Invalid; // Random "$" without "{"
             }
 
 
@@ -710,7 +722,7 @@ namespace fdf::detail
                     size_t firstHash = content.find_first_of('#', index + 2);
                     if(firstNonHex == firstHash && firstNonHex != std::string_view::npos) // First non hex character is "#"
                     {
-                        Token token = Token(TokenType::HexLiteral, index, firstNonHex - index + 1);
+                        Token token = Token(TokenType::HexLiteral, index, firstNonHex - index);
                         index = firstNonHex + 1;
                         return token;
                     }
@@ -964,15 +976,15 @@ namespace fdf::detail
 
     bool ParseFileContent(std::string_view content, std::vector<Entry>& entries, std::vector<Entry>& userTypes, std::string& fileComment) noexcept;
     bool ParseUserType(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& userTypes, Token comment);
-    bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, Token comment, size_t parentEntryIndex);
+    bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, Token comment, size_t parentEntryIndex, size_t currentlyProcessedUserTypeID = -1);
 
-    bool ParseDefaultValue(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, uint8_t typeID = 0, size_t userTypeID = -1);
-    bool ParseSimpleValue(std::string_view content, Tokenizer& tokenizer, Entry& entry, uint8_t typeID);
-    bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, uint8_t typeID = 0, size_t userTypeID = -1);
-    bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, uint8_t typeID = 0, size_t userTypeID = -1);
+    bool ParseDefaultValue(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, size_t userTypeID = -1);
+    bool ParseSimpleValue(std::string_view content, Tokenizer& tokenizer, Entry& entry);
+    bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, size_t userTypeID = -1);
+    bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, size_t userTypeID = -1, size_t currentlyProcessedUserTypeID = -1);
 
+    size_t FindEntry(std::vector<Entry>& entries, std::string_view fullIdentifier, size_t depth = 0, size_t startIndex = 0);
     void CopyEntryDeep(std::vector<Entry>& target, const std::vector<Entry>& source, size_t sourceID);
-    size_t FindEntryDeep(std::vector<Entry>& entries, std::string_view fullIdentifier, size_t depth = 0, size_t startIndex = 0);
     bool OverrideEntry(std::vector<Entry>& entries, size_t targetID, size_t sourceID);
 
     bool TestFiles();
