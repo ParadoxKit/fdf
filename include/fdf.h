@@ -19,6 +19,8 @@
 // TODO: Maybe add an option to lazily evaluate? (store every value as a string and don't process anything until requested)
 // TODO: Add explicitly specified type information to entries
 // TODO: Add some kind of enum type (to file format)
+// TODO: Add error callbacks
+// TODO: Add API to read/modify data
 
 
 
@@ -1069,17 +1071,14 @@ FDF_EXPORT namespace fdf
     public:
         bool Combine(std::string_view content, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept  
         { 
-            Writer reader(content);
-            return Combine(reader, fileCommentCombineStrategy);
+            Writer writer(content);
+            return Combine(writer, fileCommentCombineStrategy);
         }
         bool Combine(std::filesystem::path filepath, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept 
         {
-            Writer reader(filepath);
-            return Combine(reader, fileCommentCombineStrategy);
+            Writer writer(filepath);
+            return Combine(writer, fileCommentCombineStrategy);
         }
-
-    public:
-        // TODO: add API to get, add, remove, modify top level entries and access to their childs
 
     private:
         bool bIsValid = false;
