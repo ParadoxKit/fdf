@@ -1,4 +1,5 @@
-/*
+/*#
+    (file comments must start with '#')
     Any whitespace in the file, except when in a string, should be skipped,
     this will make parsing singleline and multiline consistent
 */
@@ -8,7 +9,7 @@
 appVersion=1.0.0.0   // version - Version
 name="MyGame"        // string  - String (Characters within quotes)
 name2='MyGame2'
-enabled1=true         // bool    - Bool (true or false)
+enabled1=true        // bool    - Bool (true or false)
 enabled2=false
 id=12345             // int     - Integer number
 uuid="a123-xyz"      // string  - String
@@ -17,7 +18,7 @@ pi=3.14              // float   - Floating point number
 resolution=1920x1080  // number2 - 2D number (can be float) (number2, int2, float2)
 scale=1.0x1.0x1.0     // number3 - 3D number (can be float) (number3, int3, float3)
 gradient=1x50x10x1    // number4 - 4D number (can be float) (number4, int4, float4)
-four=1x2x3x4x5         // number5 - 5D number (can be float) (number5, int5, float5)
+four=1x2x3x4x5        // number5 - 5D number (can be float) (number5, int5, float5)
 
 value=null                // null      - Represents absence of a value
 color=0xFF5733#           // hex       - Hexadecimal number
@@ -31,7 +32,7 @@ time=15:30:00                 // timestamp - Represents a date + time
 directory="C:/TestFolder"              // string - path
 filepath="C:/TestFolder/TestFile.txt"  // string - path
 
-site="www.google.com"   // string - url
+site="www.google.com"    // string - url
 IP1="127.0.0.1"          // string - ipv4
 IP2="127.0.0.1:8080"     // string - ipv4 with port number
 IP3="2001:d8::1"         // string - ipv6
@@ -66,7 +67,7 @@ levels1[ 1, 2, 3, 4, 5 ]
 */
 tags2[
     "config",   // Commas are optional, if you use new lines
-    "map",   //
+    "map",      //
     "example",  // They are also allowed for last element
 ]
 

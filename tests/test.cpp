@@ -161,6 +161,16 @@ namespace
 
     std::vector<TestDirectories> filesToTest;
     size_t longestFilename = 0;
+    std::string output;
+
+
+
+
+    bool ErrorCallback(Error error, std::string_view message)
+    {
+        output = std::format("{}\n{}: {}", output, IsWarning(error)? "Warning" : "Error", message);
+        return true;
+    }
 }
 
 
@@ -177,18 +187,26 @@ namespace fdf::detail
             std::cout << std::format("[{:02}/{:02}] {:<{}}", i + 1, filesToTest.size(), directories.inputFile, longestFilename);
 
             auto startTime = std::chrono::high_resolution_clock::now();
-            Reader reader = Reader(std::filesystem::path(directories.inputFile));
+            IO<ErrorCallback> io = std::filesystem::path(directories.inputFile);
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = duration_cast<std::chrono::nanoseconds>(endTime - startTime);
 
             std::string durationString = std::format("{:.6f}ms", duration.count() / 1'000'000.0);
-            std::cout << std::format(" -- Result: {:<7} -- Took: {:<9}\n", reader.IsValid()? "SUCCESS" : "FAIL", durationString);
+            std::cout << std::format(" -- Result: {:<7} -- Took: {:<9}", io.IsValid()? "SUCCESS" : "FAIL", durationString);
+
+            if(!output.empty())
+            {
+                std::cout << output << "\n\n";
+                output.clear();
+            }
+            else
+                std::cout << '\n';
             
             PrintAllTokens(directories.inputFile, directories.tokenizedFile);
-            PrintAllEntries(reader.entries, directories.entriesFile);
-            PrintAllEntries(reader.userTypes, directories.userTypesFile);
+            PrintAllEntries(io.entries, directories.entriesFile);
+            PrintAllEntries(io.userTypes, directories.userTypesFile);
 
-            bResult = bResult && reader.IsValid();
+            bResult = bResult && io.IsValid();
         }
 
         return bResult;
