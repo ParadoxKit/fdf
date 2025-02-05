@@ -4,7 +4,6 @@
     import fdf;
 #else
     #include "fdf.h"
-    #include <fstream>
     #include <iostream>
 #endif
 

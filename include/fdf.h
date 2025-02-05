@@ -8,6 +8,7 @@
     #include <filesystem>
     #include <fstream>
     #include <cctype>
+    #include <expected>
 
     #define FDF_EXPORT
 #endif
@@ -18,6 +19,8 @@
 // TODO: Maybe add an option to lazily evaluate? (store every value as a string and don't process anything until requested)
 // TODO: Add some kind of enum type (to file format)
 // TODO: Add API to read/modify data
+// TODO: Create API using std::reference_wrapper and std::expected (when reading) to return std::expected<std::reference_wrapper<const Entry>, ReadError>
+// TODO: Make Entry public by putting in fdf namespace not fdf::detail
 
 
 
@@ -1535,6 +1538,7 @@ namespace fdf::detail
 
                 if(comment.type != TokenType::NonExisting)
                     entry.comment = comment.ToView(content);
+                return true;
             };
             
             if(currentToken.type == TokenType::Keyword)
@@ -1544,8 +1548,7 @@ namespace fdf::detail
                     if(entry.typeID == 0)
                     {
                         entry.type = Type::Null;
-                        postProcess();
-                        return true;
+                        return postProcess();
                     }
                     
                     return false;  // TODO: For now, we don't allow null value for explicitly specified types
@@ -1555,8 +1558,7 @@ namespace fdf::detail
                     entry.type = Type::Bool;
                     entry.size = 1;
                     entry.data.b[0] = currentToken.extra8 == 1;
-                    postProcess();
-                    return true;
+                    return postProcess();
                 }
     
                 return false;  // Invalid keyword when expected a value
@@ -1678,8 +1680,7 @@ namespace fdf::detail
                     return false;
     
                 entry.type = bIsUnsigned? Type::UInt : Type::Int;
-                postProcess();
-                return true;
+                return postProcess();
             }
     
     
@@ -1752,8 +1753,7 @@ namespace fdf::detail
                 }
     
                 entry.data.f[currentDimension] = bIsNegative? -result : result;
-                postProcess();
-                return true;
+                return postProcess();
             }
     
     
@@ -1799,8 +1799,7 @@ namespace fdf::detail
                 }
     
                 entry.data.u[currentDimension] = result;
-                postProcess();
-                return true;
+                return postProcess();
             }
     
     
@@ -1870,9 +1869,8 @@ namespace fdf::detail
                     writeDynamicCharacter('\0');
                     entry.data.strDynamic.RefreshView();
                 }
-    
-                postProcess();
-                return true;
+
+                return postProcess();
             }
     
     
@@ -1895,9 +1893,8 @@ namespace fdf::detail
                     entry.data.strDynamic.data[view.size()] = '\0';
                     entry.data.strDynamic.RefreshView();
                 }
-    
-                postProcess();
-                return true;
+
+                return postProcess();
             }
     
     
@@ -1908,9 +1905,8 @@ namespace fdf::detail
                 entry.size = EVALUATE_LITERAL_TEXT.size();
                 entry.type = Type::String;
                 memcpy(entry.data.str, EVALUATE_LITERAL_TEXT.data(), EVALUATE_LITERAL_TEXT.size());
-    
-                postProcess();
-                return true;
+
+                return postProcess();
             }
     
             return false;  // Something we didn't process yet?
