@@ -36,30 +36,16 @@ var14="Test0test1test2test3test4test5test6test7"
 var15='"Test"'
 var16=3.14
 var17=18446744073709551615  // Max u64 value
-var18:int=-15x-20x30
+var18=-15x-20x30
 
-@GameSettings
-{
-    resolution:int2  // Foo Comment
-    fullscreen:bool=false
-    hudScale=0.75
-}
-@GameData
-{
-    health=100
-    settings:GameSettings
-    bar=2,
-}
-
-var19:GameData{ health=15 }
-var20:GameSettings
-var21:GameSettings
+var19{ health=15 }
+var20
 {
     foo = true
     resolution = 1920x1080  // Bar Comment
 }
 
-var22:GameSettings
+var21
 {
     foo0{ bar=true, baz=false }
     foo1[ true, false, 15 ]
@@ -67,5 +53,5 @@ var22:GameSettings
 
 var23
 [
-    :GameSettings{ bar=true }
+    { bar=true }
 ]

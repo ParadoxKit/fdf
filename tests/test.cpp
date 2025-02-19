@@ -148,11 +148,10 @@ namespace
             
             tokenizedFile = outputFile + "-Tokenized.txt";
             entriesFile   = outputFile + "-Entries.txt";
-            userTypesFile = outputFile + "-UserTypes.txt";
             outputFile    = outputFile + "-Output.txt";
         }
 
-        std::string inputFile, outputFile, tokenizedFile, entriesFile, userTypesFile;
+        std::string inputFile, outputFile, tokenizedFile, entriesFile;
     };
 
 
@@ -203,7 +202,6 @@ namespace fdf::detail
             
             PrintAllTokens(directories.inputFile, directories.tokenizedFile);
             PrintAllEntries(io.entries, directories.entriesFile);
-            PrintAllEntries(io.userTypes, directories.userTypesFile);
 
             bResult = bResult && io.IsValid();
         }
@@ -217,7 +215,7 @@ namespace fdf::detail
 
 int main()
 {
-    std::filesystem::path currentDesignFile = FDF_ROOT_DIRECTORY "/designs/Design_4.txt";
+    std::filesystem::path currentDesignFile = FDF_ROOT_DIRECTORY "/designs/Design_5.txt";
     std::filesystem::path testDir = FDF_TEST_DIRECTORY;
     std::filesystem::path outputDir = FDF_TEST_DIRECTORY "/output";
     bool result = true;

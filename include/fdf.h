@@ -133,41 +133,6 @@ namespace fdf::detail
         "null",
         "true",
         "false",
-
-        // Rest is type names
-        "bool",
-        "int",
-        "uint",
-        "float",
-
-        "hex",
-        "version",
-        "string",
-        "timestamp",
-
-        "number",
-        "number2",
-        "number3",
-        "number4",
-        "number5",
-
-        "int",
-        "int2",
-        "int3",
-        "int4",
-        "int5",
-
-        "uint",
-        "uint2",
-        "uint3",
-        "uint4",
-        "uint5",
-
-        "float",
-        "float2",
-        "float3",
-        "float4",
-        "float5",
     };
     constexpr size_t KEYWORD_COUNT = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
 
@@ -179,10 +144,8 @@ namespace fdf::detail
         EndOfFile,
         Comment,
 
-        At,
         Equal,
         Comma,
-        Colon,
 
         CurlyBraceOpen,
         CurlyBraceClose,
@@ -258,6 +221,40 @@ namespace fdf::detail
     { 
         return static_cast<uint8_t>(type) >= static_cast<uint8_t>(TokenType::ValueLiteral_Begin) &&
                static_cast<uint8_t>(type) <= static_cast<uint8_t>(TokenType::ValueLiteral_End);
+    }
+
+    constexpr void TrimWhitespaceMultilineInPlace(std::string_view view, std::string& out)
+    {
+        out.clear();
+        out.reserve(view.size());
+
+        bool bAfterNewLine = true;
+        for(char c : view)
+        {
+            if(bAfterNewLine)
+            {
+                if(std::isspace(c))
+                    continue;
+
+                bAfterNewLine = false;
+                out.push_back(c);
+            }
+            else
+            {
+                out.push_back(c);
+                if(c == '\n')
+                    bAfterNewLine = true;
+            }
+        }
+    }
+    constexpr std::string TrimWhitespaceMultiline(std::string_view view)
+    {
+        if(view.empty())
+            return {};
+
+        std::string temp;
+        TrimWhitespaceMultilineInPlace(view, temp);
+        return temp;
     }
 }
 
@@ -377,7 +374,6 @@ namespace fdf::detail
     struct Entry
     {
         Type type = Type::Invalid;
-        uint8_t typeID = 0; // Explicitly specified type ID (0 for not specified, 1 for user type, 2 is unused and rest is builtin types)
         uint8_t depth = 0;  // Depth of the entry (0 for top level, 1 for child of top level, 2 for grandchild of top level, ...)
         uint8_t identifierSize = 0;
         uint32_t size = 0;  // If Array or Map this is count of top level childs, otherwise type specific (for example: character count for string)
@@ -396,7 +392,7 @@ namespace fdf::detail
 
 
         constexpr Entry(const Entry& other) noexcept
-            : type(other.type), typeID(other.typeID), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(other.fullIdentifier), comment(other.comment)
+            : type(other.type), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(other.fullIdentifier), comment(other.comment)
         {
             if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
                 data.strDynamic = other.data.strDynamic.Copy();
@@ -404,7 +400,7 @@ namespace fdf::detail
                 data = other.data;
         }
         constexpr Entry(Entry&& other) noexcept
-            : type(other.type), typeID(other.typeID), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(std::move(other.fullIdentifier)), comment(std::move(other.comment))
+            : type(other.type), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(std::move(other.fullIdentifier)), comment(std::move(other.comment))
         {
             if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
                 data.strDynamic = other.data.strDynamic.Move();
@@ -420,7 +416,6 @@ namespace fdf::detail
             if(this != &other)
             {
                 type = other.type;
-                typeID = other.typeID;
                 depth = other.depth;
                 identifierSize = other.identifierSize;
                 size = other.size;
@@ -442,7 +437,6 @@ namespace fdf::detail
             if(this != &other)
             {
                 type = other.type;
-                typeID = other.typeID;
                 depth = other.depth;
                 identifierSize = other.identifierSize;
                 size = other.size;
@@ -672,14 +666,10 @@ namespace fdf::detail
         if(content[index] == ']')
             return Token(TokenType::SquareBraceClose, index++, 1);
 
-        if(content[index] == '@')
-            return Token(TokenType::At, index++, 1);
         if(content[index] == '=')
             return Token(TokenType::Equal, index++, 1);
         if(content[index] == ',')
             return Token(TokenType::Comma, index++, 1);
-        if(content[index] == ':')
-            return Token(TokenType::Colon, index++, 1);
 
 
 
@@ -1014,7 +1004,7 @@ namespace fdf::detail
     template<auto ERROR_CALLBACK>
     struct Parser
     {
-        constexpr static bool ParseFileContent(std::string_view content, std::vector<Entry>& entries, std::vector<Entry>& userTypes, std::string& fileComment) noexcept
+        constexpr static bool ParseFileContent(std::string_view content, std::vector<Entry>& entries, std::string& fileComment) noexcept
         {
             Tokenizer tokenizer = content;
             Token fileCommentToken = TokenType::NonExisting;
@@ -1023,7 +1013,8 @@ namespace fdf::detail
                 Token comment = TokenType::NonExisting;
                 Token type = TokenType::NonExisting;
                 Token currentToken = tokenizer.Current();
-                CHECK_TOKEN(currentToken);
+                if(currentToken.type == TokenType::Invalid)
+                    return false;
     
                 while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
                 {
@@ -1031,6 +1022,24 @@ namespace fdf::detail
                     {
                         if(entries.empty() && fileComment.empty() && currentToken.count > 0 && content[currentToken.startPosition] == '#')
                         {
+                            std::string_view sv = currentToken.ToView(content);
+                            size_t firstChar = sv.find_first_not_of("# ");
+                            if(firstChar == std::string_view::npos)
+                            {
+                                currentToken.startPosition += currentToken.count;
+                                currentToken.count = 0;
+                            }
+                            else
+                            {
+                                currentToken.startPosition += firstChar;
+                                currentToken.count = currentToken.count - firstChar;
+                                if(content[currentToken.startPosition] == '\n')
+                                {
+                                    currentToken.startPosition++;
+                                    currentToken.count--;
+                                }
+                            }
+
                             if(fileCommentToken.type != TokenType::NonExisting)
                                 if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("File already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", fileCommentToken.ToView(content), fileCommentToken.line, fileCommentToken.column, currentToken.ToView(content), currentToken.line, currentToken.column)))
                                     return false;
@@ -1048,24 +1057,9 @@ namespace fdf::detail
                     currentToken = tokenizer.Advance();
                 }
     
-                if(currentToken.type == TokenType::At)
-                {
-                    Token currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
-                    
-                    if(currentToken.type != TokenType::Identifier)
-                        return false;
-    
-                    if(!ParseUserType(content, tokenizer, userTypes, comment))
-                        return false;
-    
-                    continue;
-                }
-    
                 if(currentToken.type == TokenType::Identifier)
                 {
-                    if(!ParseVariable(content, tokenizer, entries, userTypes, comment, -1))
+                    if(!ParseVariable(content, tokenizer, entries, comment, -1))
                         return false;
     
                     continue;
@@ -1085,56 +1079,7 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseUserType(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& userTypes, Token comment)
-        {
-            Entry& userType = userTypes.emplace_back();
-            size_t currentUserTypeIndex = userTypes.size() - 1;
-    
-            userType.fullIdentifier = tokenizer.Current().ToView(content);
-            userType.identifierSize = userType.fullIdentifier.size();
-    
-            Token currentToken = tokenizer.Advance();
-            CHECK_TOKEN(currentToken);
-            CHECK_TOKEN_FOR_EOF(currentToken);
-    
-    
-    
-            if(currentToken.type == TokenType::Equal)
-            {
-                currentToken = tokenizer.Advance();
-                CHECK_TOKEN(currentToken);
-                CHECK_TOKEN_FOR_EOF(currentToken);
-            }
-    
-            while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
-            {
-                if(currentToken.type == TokenType::Comment)
-                {
-                    if(comment.type != TokenType::NonExisting)
-                        if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("Token already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", comment.ToView(content), comment.line, comment.column, currentToken.ToView(content), currentToken.line, currentToken.column)))
-                            return false;
-                    comment = currentToken;
-                }
-    
-                currentToken = tokenizer.Advance();
-                CHECK_TOKEN(currentToken);
-                CHECK_TOKEN_FOR_EOF(currentToken);
-            }
-    
-    
-    
-            if(currentToken.type == TokenType::CurlyBraceOpen)
-            {
-                return ParseMap(content, tokenizer, userTypes, userTypes, comment, -1, currentUserTypeIndex) && OverrideEntry(userTypes, FindEntry(userTypes, userTypes[currentUserTypeIndex].fullIdentifier, userTypes[currentUserTypeIndex].depth, 0), currentUserTypeIndex);
-            }
-    
-            return false;
-        }
-    
-    
-    
-    
-        constexpr static bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, Token comment, size_t parentEntryIndex, size_t currentlyProcessedUserTypeID = -1)
+        constexpr static bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, Token comment, size_t parentEntryIndex)
         {
             const bool bHasParent    = parentEntryIndex != -1;
             const bool bArrayElement = bHasParent? entries[parentEntryIndex].type == Type::Array : false;
@@ -1173,52 +1118,6 @@ namespace fdf::detail
                 if(!bArrayElement)
                     entry.fullIdentifier = parent.fullIdentifier + '.' + entry.fullIdentifier;
             }
-            
-    
-    
-            size_t userTypeID = -1;
-            if(currentToken.type == TokenType::Colon)
-            {
-                currentToken = tokenizer.Advance();
-                CHECK_TOKEN(currentToken);
-                CHECK_TOKEN_FOR_EOF(currentToken);
-    
-                if(currentToken.type == TokenType::Keyword) // Builtin type (can still be Array or Map)
-                {
-                    entry.typeID = currentToken.extra8;
-                    if(entry.typeID <= 2)
-                        return false;  // These are value keywords, not types
-                }
-                else if(currentToken.type == TokenType::Identifier) // User type (Array or Map)
-                {
-                    entry.typeID = 1;
-    
-                    std::string_view userTypeName = currentToken.ToView(content);
-                    for(size_t i = 0; i < userTypes.size(); i++)
-                    {
-                        if(userTypes[i].fullIdentifier == userTypeName)
-                        {
-                            userTypeID = i;
-                            break;
-                        }
-                    }
-    
-                    if(userTypeID == -1)
-                        return false;  // We didn't found the requested user type
-    
-                    if(userTypeID == currentlyProcessedUserTypeID)
-                        return false;  // Infinite recursion
-                }
-                else
-                {
-                    return false;  // Unexpected token
-                }
-    
-    
-                currentToken = tokenizer.Advance();
-                CHECK_TOKEN(currentToken);
-                CHECK_TOKEN_FOR_EOF(currentToken);
-            }
     
             
     
@@ -1255,9 +1154,9 @@ namespace fdf::detail
                 if(IsValueLiteral(currentToken.type))
                     return ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::CurlyBraceOpen)
-                    return ParseMap(content, tokenizer, entries, userTypes, comment, userTypeID) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+                    return ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::SquareBraceOpen)
-                    return ParseArray(content, tokenizer, entries, userTypes, comment, userTypeID) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+                    return ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
             }
             else
             {
@@ -1267,13 +1166,11 @@ namespace fdf::detail
                 if(comment.type != TokenType::NonExisting)
                     comments.push_back(comment);
 
-                Token lastToken = TokenType::NonExisting;
                 while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
                 {
                     if(currentToken.type == TokenType::Comment)
                         comments.push_back(currentToken);
 
-                    lastToken = currentToken;
                     currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                 }
@@ -1297,220 +1194,12 @@ namespace fdf::detail
                 if(IsValueLiteral(currentToken.type))
                     return warnComments() && ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::CurlyBraceOpen)
-                    return warnComments() && ParseMap(content, tokenizer, entries, userTypes, comment, userTypeID) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+                    return warnComments() && ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::SquareBraceOpen)
-                    return warnComments() && ParseArray(content, tokenizer, entries, userTypes, comment, userTypeID) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
-                if(lastToken.type == TokenType::NewLine)
-                {
-                    tokenizer = backup;
-                    currentToken = tokenizer.Current();
-
-                    for(size_t i = 1; i < comments.size(); i++)
-                    {
-                        Token previous = comments[i - 1];
-                        Token current = comments[i];
-
-                        if(current.startPosition >= currentToken.startPosition)
-                            break;
-
-                        if(comment.type != TokenType::NonExisting)
-                            if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("Token already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", previous.ToView(content), previous.line, previous.column, current.ToView(content), current.line, current.column)))
-                                return false;
-                    }
-
-                    if(!comments.empty())
-                    {
-                        Token nextComment = comments[comments.size() - 1];
-                        if(comment.type != TokenType::NonExisting)
-                            if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("Token already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", comment.ToView(content), comment.line, comment.column, nextComment.ToView(content), nextComment.line, nextComment.column)))
-                                return false;
-                        comment = nextComment;
-                    }
-
-                    if(currentToken.type == TokenType::NewLine)
-                    {
-                        currentToken = tokenizer.Advance();
-                        CHECK_TOKEN(currentToken);
-                    }
-
-                    if(comment.type != TokenType::NonExisting)
-                        entry.comment = comment.ToView(content);
-
-                    return ParseDefaultValue(content, tokenizer, entries, userTypes, userTypeID) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
-                }
+                    return warnComments() && ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
             }
     
             return false;  // Something we didn't process yet?
-        }
-    
-    
-    
-    
-        constexpr static bool ParseDefaultValue(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, size_t userTypeID)
-        {
-            Entry& entry = entries[entries.size() - 1];
-    
-            switch(entry.typeID)
-            {
-                case 0: return false;  // You can't use default value without specifying a type
-                case 1:
-                    CopyEntryDeep(entries, userTypes, userTypeID);
-                    return true;
-                case 3:
-                    entry.type = Type::Bool;
-                    entry.size = 1;
-                    entry.data.b[0] = false;
-                    return true;
-                case 4:
-                    entry.type = Type::Int;
-                    entry.size = 1;
-                    entry.data.i[0] = 0;
-                    return true;
-                case 5:
-                    entry.type = Type::UInt;
-                    entry.size = 1;
-                    entry.data.u[0] = 0;
-                    return true;
-                case 6:
-                    entry.type = Type::Float;
-                    entry.size = 1;
-                    entry.data.f[0] = 0.0;
-                    return true;
-                case 7:
-                    entry.type = Type::Hex;
-                    entry.size = 0;
-                    entry.data.str[0] = '\0';
-                    return true;
-                case 8:
-                    entry.type = Type::Version;
-                    entry.size = 3;
-                    entry.data.u[0] = 1;
-                    entry.data.u[1] = 0;
-                    entry.data.u[2] = 0;
-                    entry.data.u[3] = 0;
-                    return true;
-                case 9:
-                    entry.type = Type::String;
-                    entry.size = 0;
-                    entry.data.str[0] = '\0';
-                    return true;
-                case 10:
-                    entry.type = Type::Timestamp;
-                    entry.size = 0;
-                    entry.data.str[0] = '\0';
-                    return true;
-                case 11:
-                case 16:
-                    entry.type = Type::Int;
-                    entry.size = 1;
-                    entry.data.i[0] = 0;
-                    return true;
-                case 12:
-                case 17:
-                    entry.type = Type::Int;
-                    entry.size = 2;
-                    entry.data.i[0] = 0;
-                    entry.data.i[1] = 0;
-                    return true;
-                case 13:
-                case 18:
-                    entry.type = Type::Int;
-                    entry.size = 3;
-                    entry.data.i[0] = 0;
-                    entry.data.i[1] = 0;
-                    entry.data.i[2] = 0;
-                    return true;
-                case 14:
-                case 19:
-                    entry.type = Type::Int;
-                    entry.size = 4;
-                    entry.data.i[0] = 0;
-                    entry.data.i[1] = 0;
-                    entry.data.i[2] = 0;
-                    entry.data.i[3] = 0;
-                    return true;
-                case 15:
-                case 20:
-                    entry.type = Type::Int;
-                    entry.size = 5;
-                    entry.data.i[0] = 0;
-                    entry.data.i[1] = 0;
-                    entry.data.i[2] = 0;
-                    entry.data.i[3] = 0;
-                    entry.data.i[4] = 0;
-                    return true;
-                case 21:
-                    entry.type = Type::UInt;
-                    entry.size = 1;
-                    entry.data.u[0] = 0;
-                    return true;
-                case 22:
-                    entry.type = Type::UInt;
-                    entry.size = 2;
-                    entry.data.u[0] = 0;
-                    entry.data.u[1] = 0;
-                    return true;
-                case 23:
-                    entry.type = Type::UInt;
-                    entry.size = 3;
-                    entry.data.u[0] = 0;
-                    entry.data.u[1] = 0;
-                    entry.data.u[2] = 0;
-                    return true;
-                case 24:
-                    entry.type = Type::UInt;
-                    entry.size = 4;
-                    entry.data.u[0] = 0;
-                    entry.data.u[1] = 0;
-                    entry.data.u[2] = 0;
-                    entry.data.u[3] = 0;
-                    return true;
-                case 25:
-                    entry.type = Type::UInt;
-                    entry.size = 5;
-                    entry.data.u[0] = 0;
-                    entry.data.u[1] = 0;
-                    entry.data.u[2] = 0;
-                    entry.data.u[3] = 0;
-                    entry.data.u[4] = 0;
-                    return true;
-                case 26:
-                    entry.type = Type::Float;
-                    entry.size = 1;
-                    entry.data.f[0] = 0;
-                    return true;
-                case 27:
-                    entry.type = Type::Float;
-                    entry.size = 2;
-                    entry.data.f[0] = 0;
-                    entry.data.f[1] = 0;
-                    return true;
-                case 28:
-                    entry.type = Type::Float;
-                    entry.size = 3;
-                    entry.data.f[0] = 0;
-                    entry.data.f[1] = 0;
-                    entry.data.f[2] = 0;
-                    return true;
-                case 29:
-                    entry.type = Type::Float;
-                    entry.size = 4;
-                    entry.data.f[0] = 0;
-                    entry.data.f[1] = 0;
-                    entry.data.f[2] = 0;
-                    entry.data.f[3] = 0;
-                    return true;
-                case 30:
-                    entry.type = Type::Float;
-                    entry.size = 5;
-                    entry.data.f[0] = 0;
-                    entry.data.f[1] = 0;
-                    entry.data.f[2] = 0;
-                    entry.data.f[3] = 0;
-                    entry.data.f[4] = 0;
-                    return true;
-                default: return false;  // Something we didn't process yet?
-            }
         }
     
     
@@ -1545,13 +1234,8 @@ namespace fdf::detail
             {
                 if(currentToken.extra8 == 0)
                 {
-                    if(entry.typeID == 0)
-                    {
-                        entry.type = Type::Null;
-                        return postProcess();
-                    }
-                    
-                    return false;  // TODO: For now, we don't allow null value for explicitly specified types
+                    entry.type = Type::Null;
+                    return postProcess();
                 }
                 if(currentToken.extra8 == 1 || currentToken.extra8 == 2)
                 {
@@ -1563,9 +1247,6 @@ namespace fdf::detail
     
                 return false;  // Invalid keyword when expected a value
             }
-    
-            if(entry.typeID == 1)
-                return false;  // User type cannot have a simple value literal
     
             entry.size = currentToken.extra8;  // Dimension count or string length
     
@@ -1915,7 +1596,7 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, Token comment, size_t userTypeID)
+        constexpr static bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, Token comment)
         {
             size_t entryID = entries.size() - 1;
             entries[entryID].type = Type::Array;
@@ -1943,9 +1624,9 @@ namespace fdf::detail
                 }
     
     
-                if(IsValueLiteral(currentToken.type) || currentToken.type == TokenType::CurlyBraceOpen || currentToken.type == TokenType::SquareBraceOpen || currentToken.type == TokenType::Colon)
+                if(IsValueLiteral(currentToken.type) || currentToken.type == TokenType::CurlyBraceOpen || currentToken.type == TokenType::SquareBraceOpen)
                 {
-                    if(!ParseVariable(content, tokenizer, entries, userTypes, childComment, entryID))
+                    if(!ParseVariable(content, tokenizer, entries, childComment, entryID))
                         return false;
     
                     currentToken = tokenizer.Current();
@@ -1989,13 +1670,13 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, const std::vector<Entry>& userTypes, Token comment, size_t userTypeID, size_t currentlyProcessedUserTypeID = -1)
+        constexpr static bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, Token comment)
         {
             size_t entryID = entries.size() - 1;
             entries[entryID].type = Type::Map;
     
-            if(entries[entryID].typeID == 1)
-                CopyEntryDeep(entries, userTypes, userTypeID);
+            //if(entries[entryID].typeID == 1)
+            //    CopyEntryDeep(entries, userTypes, userTypeID);
     
             Token currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
@@ -2022,7 +1703,7 @@ namespace fdf::detail
     
                 if(currentToken.type == TokenType::Identifier)
                 {
-                    if(!ParseVariable(content, tokenizer, entries, userTypes, childComment, entryID, currentlyProcessedUserTypeID))
+                    if(!ParseVariable(content, tokenizer, entries, childComment, entryID))
                         return false;
     
                     currentToken = tokenizer.Current();
@@ -2146,7 +1827,7 @@ namespace fdf
         constexpr IO() noexcept = default;
         constexpr IO(std::string_view content) noexcept
         {
-            if(detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, entries, userTypes, fileComment))
+            if(detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, entries, fileComment))
                 bIsValid = true;
         }
         IO(std::filesystem::path filepath) noexcept
@@ -2158,7 +1839,7 @@ namespace fdf
             if(file)
             {
                 std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-                if(detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, entries, userTypes, fileComment))
+                if(detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, entries, fileComment))
                     bIsValid = true;
             }
         }
@@ -2201,7 +1882,6 @@ namespace fdf
             }
 
             entries.insert_range(entries.end(), other.entries);
-            userTypes.insert_range(userTypes.end(), other.userTypes);
             return true;
         }
 
@@ -2214,7 +1894,6 @@ namespace fdf
     private:
         bool bIsValid = false;
         std::vector<detail::Entry> entries;
-        std::vector<detail::Entry> userTypes;
 
     public:
         std::string fileComment;
