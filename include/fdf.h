@@ -9,6 +9,7 @@
     #include <fstream>
     #include <cctype>
     #include <expected>
+    #include <span>
 
     #define FDF_EXPORT
 #endif
@@ -558,6 +559,65 @@ FDF_EXPORT namespace fdf
                     return {};
             }
         };
+
+
+
+
+        template<typename T>
+        auto GetValue() const  {  }
+
+        template<>
+        auto GetValue<bool>() const
+        {
+            if(type != Type::UInt)
+                throw std::runtime_error("Non matching type is not 'bool'");
+            return data.b[0];
+        }
+
+        template<>
+        auto GetValue<int64_t>() const
+        {
+            if(type != Type::Int)
+                throw std::runtime_error("Non matching type is not 'int64_t'");
+            return std::span<const int64_t>(data.i, size);
+        }
+        template<>
+        auto GetValue<int>() const  {  return GetValue<int64_t>();  }
+
+        template<>
+        auto GetValue<uint64_t>() const
+        {
+            if(type != Type::UInt && type != Type::Version)
+                throw std::runtime_error("Non matching type is not 'uint64_t'");
+            return std::span<const uint64_t>(data.u, size);
+        }
+        template<>
+        auto GetValue<unsigned int>() const { return GetValue<uint64_t>(); }
+
+        template<>
+        auto GetValue<double>() const
+        {
+            if(type != Type::UInt)
+                throw std::runtime_error("Non matching type is not 'double'");
+            return std::span<const double>(data.f, size);
+        }
+        template<>
+        auto GetValue<float>() const { return GetValue<double>(); }
+
+        template<>
+        auto GetValue<char>() const
+        {
+            if(type != Type::String && type != Type::Hex && type != Type::Timestamp)
+                throw std::runtime_error("Non matching type is not string");
+
+            if(size > detail::VARIANT_SIZE - 1)
+                return std::string_view(data.strDynamic.data, size);
+            return std::string_view(data.str, size);
+        }
+        template<>
+        auto GetValue<std::string>() const { return GetValue<char>(); }
+        template<>
+        auto GetValue<std::string_view>() const { return GetValue<char>(); }
     };
 }
 
