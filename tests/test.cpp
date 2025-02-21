@@ -10,11 +10,15 @@
 
 
 
-namespace
-{
-    using namespace fdf;
-    using namespace fdf::detail;
 
+using namespace fdf;
+using namespace fdf::detail;
+
+
+
+
+namespace fdf::detail
+{
     constexpr std::string_view TOKEN_TYPE_TO_STRING[] =
     {
         "NonExisting     ",
@@ -169,13 +173,10 @@ namespace
         output = std::format("{}\n{}: {}", output, IsWarning(error)? "Warning" : "Error", message);
         return true;
     }
-}
+
+    
 
 
-
-
-namespace fdf::detail
-{
     bool TestFiles()
     {
         bool bResult = true;

@@ -103,6 +103,8 @@ FDF_EXPORT namespace fdf
         return static_cast<uint8_t>(type) >= static_cast<uint8_t>(Error::Error_Begin) &&
                static_cast<uint8_t>(type) <= static_cast<uint8_t>(Error::Error_End);
     }
+
+    struct Entry;
 }
 
 
@@ -209,7 +211,13 @@ namespace fdf::detail
 
 namespace fdf::detail
 {
+    void PrintAllTokens(std::string_view inFile, std::string_view outFile);
+    void PrintAllEntries(const std::vector<Entry>& entries, std::string_view outFile);
     bool TestFiles();
+
+    template<auto ERROR_CALLBACK>
+    struct Parser;
+
 
     constexpr void constexpr_memcpy(char* dest, const char* src, size_t size)
     {
@@ -302,7 +310,7 @@ namespace fdf::detail
                 data = nullptr;
                 capacity = 0;
             }
-            constexpr void Reserve(size_t newCapacity) noexcept
+            constexpr void Reserve(size_t newCapacity)
             {
                 if(newCapacity <= capacity)
                     return;
@@ -317,13 +325,13 @@ namespace fdf::detail
                 capacity = newCapacity;
                 RefreshView();
             }
-            constexpr void InitialAllocate(size_t newCapacity) noexcept
+            constexpr void InitialAllocate(size_t newCapacity)
             {
                 data = new char[newCapacity];
                 capacity = newCapacity;
                 RefreshView();
             }
-            constexpr void Reallocate(size_t newCapacity) noexcept
+            constexpr void Reallocate(size_t newCapacity)
             {
                 size_t smallest = newCapacity > capacity? capacity : newCapacity;
                 char* newData = new char[capacity];
@@ -335,7 +343,7 @@ namespace fdf::detail
                 capacity = newCapacity;
                 RefreshView();
             }
-            constexpr String Copy() const noexcept
+            constexpr String Copy() const
             {
                 String other{};
                 if(capacity > 0 && data != nullptr)
@@ -367,34 +375,49 @@ namespace fdf::detail
         constexpr  Variant() noexcept  { }
         constexpr ~Variant() noexcept  { }
     };
+}
 
 
 
 
+FDF_EXPORT namespace fdf
+{
     struct Entry
     {
+        friend void detail::PrintAllTokens(std::string_view inFile, std::string_view outFile);
+        friend void detail::PrintAllEntries(const std::vector<Entry>& entries, std::string_view outFile);
+        friend bool detail::TestFiles();
+
+        template<auto ERROR_CALLBACK>
+        friend struct detail::Parser;
+
+    public:
         Type type = Type::Invalid;
         uint8_t depth = 0;  // Depth of the entry (0 for top level, 1 for child of top level, 2 for grandchild of top level, ...)
+        
+    private:
         uint8_t identifierSize = 0;
         uint32_t size = 0;  // If Array or Map this is count of top level childs, otherwise type specific (for example: character count for string)
 
+        detail::Variant data;
         std::string fullIdentifier;
+
+    public:
         std::string comment;
-        Variant data;
 
     public:
         constexpr Entry() noexcept = default;
         constexpr ~Entry() noexcept
         {
-            if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
+            if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                 data.strDynamic.Delete();
         }
 
 
-        constexpr Entry(const Entry& other) noexcept
+        constexpr Entry(const Entry& other)
             : type(other.type), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(other.fullIdentifier), comment(other.comment)
         {
-            if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
+            if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                 data.strDynamic = other.data.strDynamic.Copy();
             else
                 data = other.data;
@@ -402,7 +425,7 @@ namespace fdf::detail
         constexpr Entry(Entry&& other) noexcept
             : type(other.type), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(std::move(other.fullIdentifier)), comment(std::move(other.comment))
         {
-            if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
+            if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                 data.strDynamic = other.data.strDynamic.Move();
             else
                 data = other.data;
@@ -411,7 +434,7 @@ namespace fdf::detail
         }
 
 
-        constexpr Entry& operator=(const Entry& other) noexcept
+        constexpr Entry& operator=(const Entry& other)
         {
             if(this != &other)
             {
@@ -422,10 +445,10 @@ namespace fdf::detail
                 fullIdentifier = other.fullIdentifier;
                 comment = other.comment;
 
-                if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
+                if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                     data.strDynamic.Delete();
 
-                if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
+                if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                     data.strDynamic = other.data.strDynamic.Copy();
                 else
                     data = other.data;
@@ -443,10 +466,10 @@ namespace fdf::detail
                 fullIdentifier = std::move(other.fullIdentifier);
                 comment = std::move(other.comment);
 
-                if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
+                if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                     data.strDynamic.Delete();
                 
-                if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > VARIANT_SIZE - 1)
+                if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                     data.strDynamic = other.data.strDynamic.Move();
                 else
                     data = other.data;
@@ -456,9 +479,15 @@ namespace fdf::detail
             return *this;
         }
 
+    public:
+        constexpr bool HasValue()    const noexcept  { return type != Type::Invalid && type != Type::Null; }
+        constexpr bool IsContainer() const noexcept  { return type == Type::Array   || type == Type::Map; }
 
 
-
+        constexpr std::string_view GetFullIdentifier() const noexcept
+        {
+            return fullIdentifier;
+        }
         constexpr std::string_view GetIdentifier() const noexcept
         {
             return std::string_view(fullIdentifier.data() + fullIdentifier.size() - identifierSize, identifierSize);
@@ -467,20 +496,40 @@ namespace fdf::detail
         {
             return std::string_view(fullIdentifier.data() + fullIdentifier.size() - identifierSize - 1, identifierSize + 1);
         }
-        constexpr std::string_view DataToView(std::string& temp) const noexcept
+        constexpr std::string_view GetParentIdentifier() const noexcept
+        {
+            return std::string_view(fullIdentifier.data(), fullIdentifier.size() - identifierSize - 1);
+        }
+        constexpr std::string_view GetParentIdentifierWithDot() const noexcept
+        {
+            return std::string_view(fullIdentifier.data(), fullIdentifier.size() - identifierSize);
+        }
+
+        constexpr void SetIdentifier(std::string_view newIdentifier)
+        {
+            if(newIdentifier.empty())
+                throw std::runtime_error("Identifier can't be empty");
+
+            fullIdentifier.resize(fullIdentifier.size() - identifierSize);
+            fullIdentifier += newIdentifier;
+            identifierSize = newIdentifier.size();
+        }
+
+
+        constexpr std::string_view DataToView(std::string& temp) const
         {
             switch(type)
             {
-                case Type::Invalid: return NONE_TEXT;
-                case Type::Null:    return NULL_TEXT;
-                case Type::Array:   return ARRAY_TEXT;
-                case Type::Map:     return MAP_TEXT;
-                case Type::Bool:    return data.b[0]? TRUE_TEXT : FALSE_TEXT;
+                case Type::Invalid: return detail::NONE_TEXT;
+                case Type::Null:    return detail::NULL_TEXT;
+                case Type::Array:   return detail::ARRAY_TEXT;
+                case Type::Map:     return detail::MAP_TEXT;
+                case Type::Bool:    return data.b[0]? detail::TRUE_TEXT : detail::FALSE_TEXT;
 
                 case Type::String:
                 case Type::Hex:
                 case Type::Timestamp:
-                    return size > VARIANT_SIZE - 1? data.strDynamic.view.substr(0, size) : std::string_view(data.str, size);
+                    return size > detail::VARIANT_SIZE - 1? data.strDynamic.view.substr(0, size) : std::string_view(data.str, size);
 
                 case Type::Version:
                     temp = std::format("{}.{}.{}.{}", data.u[0], data.u[1], data.u[2], data.u[3]);
@@ -1823,6 +1872,7 @@ namespace fdf
     class IO
     {
         friend bool detail::TestFiles();
+
     public:
         constexpr IO() noexcept = default;
         constexpr IO(std::string_view content) noexcept
@@ -1858,7 +1908,8 @@ namespace fdf
             IO other(filepath);
             return Combine(other, fileCommentCombineStrategy);
         }
-        constexpr bool Combine(const IO& other, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
+        template<auto OTHER_ERROR_CALLBACK>
+        constexpr bool Combine(const IO<OTHER_ERROR_CALLBACK>& other, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
         {
             if(!IsValid() || !other.IsValid())
                 return false;
@@ -1893,7 +1944,7 @@ namespace fdf
 
     private:
         bool bIsValid = false;
-        std::vector<detail::Entry> entries;
+        std::vector<Entry> entries;
 
     public:
         std::string fileComment;
