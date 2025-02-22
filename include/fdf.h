@@ -1935,45 +1935,35 @@ namespace fdf
 
     public:
         constexpr IO() noexcept = default;
-        constexpr IO(std::string_view content) noexcept
-        {
-            if(detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, entries, fileComment))
-                bIsValid = true;
-        }
-        IO(std::filesystem::path filepath) noexcept
-        {
-            if(!std::filesystem::exists(filepath) || !std::filesystem::is_regular_file(filepath))
-                return;
-
-            std::ifstream file(filepath);
-            if(file)
-            {
-                std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-                if(detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, entries, fileComment))
-                    bIsValid = true;
-            }
-        }
-
-        constexpr operator bool() const noexcept  { return bIsValid; }
-        constexpr bool IsValid()  const noexcept  { return bIsValid; }
 
     public:
-        constexpr bool Combine(std::string_view content, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
+        constexpr bool Parse(std::string_view content, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
         {
-            IO other(content);
+            IO other;
+            if(!detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
+                return false;
+
             return Combine(other, fileCommentCombineStrategy);
         }
-        inline bool Combine(std::filesystem::path filepath, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
+        inline bool Parse(std::filesystem::path filepath, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
         {
-            IO other(filepath);
+            if(!std::filesystem::exists(filepath) || !std::filesystem::is_regular_file(filepath))
+                return false;
+
+            std::ifstream file(filepath);
+            if(!file)
+                return false;
+
+            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            IO other;
+            if(!detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
+                return false;
+
             return Combine(other, fileCommentCombineStrategy);
         }
         template<auto OTHER_ERROR_CALLBACK>
         constexpr bool Combine(const IO<OTHER_ERROR_CALLBACK>& other, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
         {
-            if(!IsValid() || !other.IsValid())
-                return false;
-
             switch(fileCommentCombineStrategy)
             {
                 case CommentCombineStrategy::UseExisting: break;
@@ -2000,10 +1990,7 @@ namespace fdf
         void WriteToBuffer(std::string& buffer) noexcept  { }
         void WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) noexcept  { }
 
-    public:
-
     private:
-        bool bIsValid = false;
         std::vector<Entry> entries;
 
     public:
