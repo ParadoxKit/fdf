@@ -18,10 +18,9 @@
 
 
 // TODO: Maybe add an option to lazily evaluate? (store every value as a string and don't process anything until requested)
-// TODO: Add some kind of enum type (to file format)
+// TODO: Maybe add some kind of enum type (to file format)
 // TODO: Add API to read/modify data
 // TODO: Create API using std::reference_wrapper and std::expected (when reading) to return std::expected<std::reference_wrapper<const Entry>, ReadError>
-// TODO: Make Entry public by putting in fdf namespace not fdf::detail
 
 
 
