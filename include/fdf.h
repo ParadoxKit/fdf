@@ -10,6 +10,7 @@
     #include <cctype>
     #include <expected>
     #include <span>
+    #include <utility>
 
     #define FDF_EXPORT
 #endif
@@ -1608,9 +1609,9 @@ namespace fdf::detail
                     {
                         bDynamic = true;
                         char buffer[VARIANT_SIZE] = {};
-                        memcpy(buffer, entry.data.str, size);
+                        constexpr_memcpy(buffer, entry.data.str, size);
                         entry.data.strDynamic.InitialAllocate(entry.size + 1);
-                        memcpy(entry.data.strDynamic.data, buffer, size);
+                        constexpr_memcpy(entry.data.strDynamic.data, buffer, size);
                     }
     
                     entry.data.strDynamic[size++] = c;
@@ -1672,13 +1673,13 @@ namespace fdf::detail
     
                 if(view.size() + 1 < VARIANT_SIZE)
                 {
-                    memcpy(entry.data.str, view.data(), view.size());
+                    constexpr_memcpy(entry.data.str, view.data(), view.size());
                     entry.data.str[view.size()] = '\0';
                 }
                 else
                 {
                     entry.data.strDynamic.InitialAllocate(entry.size + 1);
-                    memcpy(entry.data.strDynamic.data, view.data(), view.size());
+                    constexpr_memcpy(entry.data.strDynamic.data, view.data(), view.size());
                     entry.data.strDynamic.data[view.size()] = '\0';
                     entry.data.strDynamic.RefreshView();
                 }
@@ -1693,7 +1694,7 @@ namespace fdf::detail
             {
                 entry.size = EVALUATE_LITERAL_TEXT.size();
                 entry.type = Type::String;
-                memcpy(entry.data.str, EVALUATE_LITERAL_TEXT.data(), EVALUATE_LITERAL_TEXT.size());
+                constexpr_memcpy(entry.data.str, EVALUATE_LITERAL_TEXT.data(), EVALUATE_LITERAL_TEXT.size());
 
                 return postProcess();
             }
@@ -1981,7 +1982,7 @@ namespace fdf
                 default: std::unreachable();
             }
 
-            entries.insert_range(entries.end(), other.entries);
+            entries.insert(entries.end(), other.entries.begin(), other.entries.end());
             return true;
         }
 
