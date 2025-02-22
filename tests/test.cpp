@@ -186,12 +186,13 @@ namespace fdf::detail
             std::cout << std::format("[{:02}/{:02}] {:<{}}", i + 1, filesToTest.size(), directories.inputFile, longestFilename);
 
             auto startTime = std::chrono::high_resolution_clock::now();
-            IO<ErrorCallback> io = std::filesystem::path(directories.inputFile);
+            IO<ErrorCallback> io;
+            bool bSuccess = io.Parse(std::filesystem::path(directories.inputFile));
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = duration_cast<std::chrono::nanoseconds>(endTime - startTime);
 
             std::string durationString = std::format("{:.6f}ms", duration.count() / 1'000'000.0);
-            std::cout << std::format(" -- Result: {:<7} -- Took: {:<9}", io.IsValid()? "SUCCESS" : "FAIL", durationString);
+            std::cout << std::format(" -- Result: {:<7} -- Took: {:<9}", bSuccess? "SUCCESS" : "FAIL", durationString);
 
             if(!output.empty())
             {
@@ -204,7 +205,7 @@ namespace fdf::detail
             PrintAllTokens(directories.inputFile, directories.tokenizedFile);
             PrintAllEntries(io.entries, directories.entriesFile);
 
-            bResult = bResult && io.IsValid();
+            bResult = bResult && bSuccess;
         }
 
         return bResult;
