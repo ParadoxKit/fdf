@@ -11,6 +11,7 @@
     #include <expected>
     #include <span>
     #include <utility>
+    #include <algorithm>
 
     #define FDF_EXPORT
 #endif
