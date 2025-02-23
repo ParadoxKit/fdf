@@ -22,6 +22,7 @@
 // TODO: Maybe add some kind of enum type (to file format)
 // TODO: Add API to read/modify data
 // TODO: Create API using std::reference_wrapper and std::expected (when reading) to return std::expected<std::reference_wrapper<const Entry>, ReadError>
+// TODO: Allow multidimensional bool
 
 
 
@@ -105,7 +106,7 @@ FDF_EXPORT namespace fdf
                static_cast<uint8_t>(type) <= static_cast<uint8_t>(Error::Error_End);
     }
 
-    struct Entry;
+    class Entry;
 }
 
 
@@ -212,12 +213,14 @@ namespace fdf::detail
 
 namespace fdf::detail
 {
-    void PrintAllTokens(std::string_view inFile, std::string_view outFile);
-    void PrintAllEntries(const std::vector<Entry>& entries, std::string_view outFile);
-    bool TestFiles();
+    struct Test;
 
     template<auto ERROR_CALLBACK>
-    struct Parser;
+    struct Utils;
+
+    template <typename Callable>
+    constexpr bool IsValidErrorCallback = std::is_invocable_r_v<bool, Callable, Error, std::string_view>;
+    inline constexpr auto DefaultErrorCallback = [](Error error, std::string_view message) -> bool  { return true; };
 
 
     constexpr void constexpr_memcpy(char* dest, const char* src, size_t size)
@@ -383,14 +386,22 @@ namespace fdf::detail
 
 FDF_EXPORT namespace fdf
 {
-    struct Entry
+    template<auto ERROR_CALLBACK = detail::DefaultErrorCallback> requires(detail::IsValidErrorCallback<decltype(ERROR_CALLBACK)>)
+    class IO;
+
+    namespace detail  { void PrintLastSuccessfullyParsedEntry(auto& io); }
+
+    class Entry
     {
-        friend void detail::PrintAllTokens(std::string_view inFile, std::string_view outFile);
-        friend void detail::PrintAllEntries(const std::vector<Entry>& entries, std::string_view outFile);
-        friend bool detail::TestFiles();
+        friend struct detail::Test;
 
         template<auto ERROR_CALLBACK>
-        friend struct detail::Parser;
+        friend struct detail::Utils;
+
+        template<auto ERROR_CALLBACK> requires(detail::IsValidErrorCallback<decltype(ERROR_CALLBACK)>)
+        friend class IO;
+
+        static const Entry INVALID;
 
     public:
         Type type = Type::Invalid;
@@ -481,8 +492,10 @@ FDF_EXPORT namespace fdf
         }
 
     public:
-        constexpr bool HasValue()    const noexcept  { return type != Type::Invalid && type != Type::Null; }
-        constexpr bool IsContainer() const noexcept  { return type == Type::Array   || type == Type::Map; }
+        constexpr bool IsValid()     const noexcept  { return type != Type::Invalid; }
+        constexpr bool IsNull()      const noexcept  { return type == Type::Null; }
+        constexpr bool IsContainer() const noexcept  { return type == Type::Array || type == Type::Map; }
+        constexpr bool HasValue()    const noexcept  { return IsValid() && !IsNull() && !IsContainer(); }
 
 
         constexpr std::string_view GetFullIdentifier() const noexcept
@@ -564,12 +577,12 @@ FDF_EXPORT namespace fdf
 
 
         template<typename T>
-        constexpr auto GetValue() const  {  }
+        constexpr auto GetValue() const  { }
 
         template<>
         constexpr auto GetValue<bool>() const
         {
-            if(type != Type::UInt)
+            if(type != Type::Bool)
                 throw std::runtime_error("Non matching type is not 'bool'");
             return data.b[0];
         }
@@ -582,7 +595,7 @@ FDF_EXPORT namespace fdf
             return std::span<const int64_t>(data.i, size);
         }
         template<>
-        constexpr auto GetValue<int>() const  {  return GetValue<int64_t>();  }
+        constexpr auto GetValue<int>() const  { return GetValue<int64_t>(); }
 
         template<>
         constexpr auto GetValue<uint64_t>() const
@@ -592,34 +605,84 @@ FDF_EXPORT namespace fdf
             return std::span<const uint64_t>(data.u, size);
         }
         template<>
-        constexpr auto GetValue<unsigned int>() const { return GetValue<uint64_t>(); }
+        constexpr auto GetValue<unsigned int>() const  { return GetValue<uint64_t>(); }
 
         template<>
         constexpr auto GetValue<double>() const
         {
-            if(type != Type::UInt)
+            if(type != Type::Float)
                 throw std::runtime_error("Non matching type is not 'double'");
             return std::span<const double>(data.f, size);
         }
         template<>
-        constexpr auto GetValue<float>() const { return GetValue<double>(); }
+        constexpr auto GetValue<float>() const  { return GetValue<double>(); }
 
         template<>
         constexpr auto GetValue<char>() const
         {
             if(type != Type::String && type != Type::Hex && type != Type::Timestamp)
-                throw std::runtime_error("Non matching type is not string");
+                throw std::runtime_error("Non matching type is not 'string'");
 
             if(size > detail::VARIANT_SIZE - 1)
                 return std::string_view(data.strDynamic.data, size);
             return std::string_view(data.str, size);
         }
         template<>
-        constexpr auto GetValue<std::string>() const { return GetValue<char>(); }
+        constexpr auto GetValue<std::string>() const  { return GetValue<char>(); }
         template<>
-        constexpr auto GetValue<std::string_view>() const { return GetValue<char>(); }
+        constexpr auto GetValue<std::string_view>() const  { return GetValue<char>(); }
+
+
+
+
+        template<typename T>
+        constexpr auto GetValueUnsafe() const  { }
+
+        template<>
+        constexpr auto GetValueUnsafe<bool>() const
+        {
+            return data.b[0];
+        }
+
+        template<>
+        constexpr auto GetValueUnsafe<int64_t>() const
+        {
+            return std::span<const int64_t>(data.i, size);
+        }
+        template<>
+        constexpr auto GetValueUnsafe<int>() const  { return GetValueUnsafe<int64_t>(); }
+
+        template<>
+        constexpr auto GetValueUnsafe<uint64_t>() const
+        {
+            return std::span<const uint64_t>(data.u, size);
+        }
+        template<>
+        constexpr auto GetValueUnsafe<unsigned int>() const  { return GetValueUnsafe<uint64_t>(); }
+
+        template<>
+        constexpr auto GetValueUnsafe<double>() const
+        {
+            return std::span<const double>(data.f, size);
+        }
+        template<>
+        constexpr auto GetValueUnsafe<float>() const  { return GetValueUnsafe<double>(); }
+
+        template<>
+        constexpr auto GetValueUnsafe<char>() const
+        {
+            if(size > detail::VARIANT_SIZE - 1)
+                return std::string_view(data.strDynamic.data, size);
+            return std::string_view(data.str, size);
+        }
+        template<>
+        constexpr auto GetValueUnsafe<std::string>() const  { return GetValueUnsafe<char>(); }
+        template<>
+        constexpr auto GetValueUnsafe<std::string_view>() const  { return GetValueUnsafe<char>(); }
     };
 }
+
+inline const fdf::Entry fdf::Entry::INVALID;
 
 
 
@@ -1111,7 +1174,7 @@ namespace fdf::detail
 
 
     template<auto ERROR_CALLBACK>
-    struct Parser
+    struct Utils
     {
         constexpr static bool ParseFileContent(std::string_view content, std::vector<Entry>& entries, std::string& fileComment) noexcept
         {
@@ -1261,11 +1324,11 @@ namespace fdf::detail
                 }
 
                 if(IsValueLiteral(currentToken.type))
-                    return ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+                    return ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::CurlyBraceOpen)
-                    return ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+                    return ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::SquareBraceOpen)
-                    return ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+                    return ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
             }
             else
             {
@@ -1301,11 +1364,11 @@ namespace fdf::detail
                 };
 
                 if(IsValueLiteral(currentToken.type))
-                    return warnComments() && ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+                    return warnComments() && ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::CurlyBraceOpen)
-                    return warnComments() && ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+                    return warnComments() && ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::SquareBraceOpen)
-                    return warnComments() && ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex : 0), currentEntryIndex);
+                    return warnComments() && ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
             }
     
             return false;  // Something we didn't process yet?
@@ -1856,7 +1919,7 @@ namespace fdf::detail
     
     
     
-        constexpr static size_t FindEntry(std::vector<Entry>& entries, std::string_view fullIdentifier, size_t depth, size_t startIndex)
+        constexpr static size_t FindEntry(const std::vector<Entry>& entries, std::string_view fullIdentifier, size_t depth, size_t startIndex)
         {
             for(size_t i = startIndex; i < entries.size(); i++)
             {
@@ -1908,6 +1971,21 @@ namespace fdf::detail
     
             return false;  // Something we didn't process yet?
         }
+
+
+
+
+
+
+
+
+
+
+        template<Style STYLE>
+        constexpr static bool WriteFileContent(std::string& buffer, std::vector<Entry>& entries, std::string& fileComment)
+        {
+            return false;
+        }
     };
 }
 
@@ -1925,13 +2003,10 @@ namespace fdf::detail
 
 namespace fdf
 {
-    template <typename Callable>
-    constexpr bool IsValidErrorCallback = std::is_invocable_r_v<bool, Callable, Error, std::string_view>;
-
-    template<auto ERROR_CALLBACK = [](Error error, std::string_view message) -> bool  { return true; }>  requires(IsValidErrorCallback<decltype(ERROR_CALLBACK)>)
+    template<auto ERROR_CALLBACK> requires(detail::IsValidErrorCallback<decltype(ERROR_CALLBACK)>)
     class IO
     {
-        friend bool detail::TestFiles();
+        friend struct detail::Test;
 
     public:
         constexpr IO() noexcept = default;
@@ -1940,7 +2015,7 @@ namespace fdf
         constexpr bool Parse(std::string_view content, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
         {
             IO other;
-            if(!detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
+            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
                 return false;
 
             return Combine(other, fileCommentCombineStrategy);
@@ -1956,7 +2031,7 @@ namespace fdf
 
             std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             IO other;
-            if(!detail::Parser<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
+            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
                 return false;
 
             return Combine(other, fileCommentCombineStrategy);
@@ -1987,8 +2062,15 @@ namespace fdf
         }
 
     public:
-        void WriteToBuffer(std::string& buffer) noexcept  { }
-        void WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) noexcept  { }
+        constexpr void WriteToBuffer(std::string& buffer) noexcept  { }
+        inline void WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) noexcept  { }
+
+    public:
+        constexpr const Entry& GetEntry(std::string_view identifier) const
+        {
+            const size_t id = detail::Utils<ERROR_CALLBACK>::FindEntry(entries, identifier, std::ranges::count(identifier, '.'), 0);
+            return entries.size() > id? entries[id] : Entry::INVALID;
+        }
 
     private:
         std::vector<Entry> entries;
