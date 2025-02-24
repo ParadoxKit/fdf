@@ -22,6 +22,7 @@
 // TODO: Maybe add some kind of enum type (to file format)
 // TODO: Add API to read/modify data
 // TODO: Allow multidimensional bool
+// TODO: add a way to access child Entries from parent
 
 
 
@@ -398,13 +399,11 @@ FDF_EXPORT namespace fdf
         template<auto ERROR_CALLBACK> requires(detail::IsValidErrorCallback<decltype(ERROR_CALLBACK)>)
         friend class IO;
 
-        static const Entry INVALID;
+        static Entry INVALID;
 
-    public:
+    private:
         Type type = Type::Invalid;
         uint8_t depth = 0;  // Depth of the entry (0 for top level, 1 for child of top level, 2 for grandchild of top level, ...)
-        
-    private:
         uint8_t identifierSize = 0;
         uint32_t size = 0;  // If Array or Map this is count of top level childs, otherwise type specific (for example: character count for string)
 
@@ -489,10 +488,13 @@ FDF_EXPORT namespace fdf
         }
 
     public:
-        constexpr bool IsValid()     const noexcept  { return type != Type::Invalid; }
-        constexpr bool IsNull()      const noexcept  { return type == Type::Null; }
-        constexpr bool IsContainer() const noexcept  { return type == Type::Array || type == Type::Map; }
-        constexpr bool HasValue()    const noexcept  { return IsValid() && !IsNull() && !IsContainer(); }
+        constexpr uint32_t GetChildCount() const noexcept  { return IsContainer()? size : 0; }
+        constexpr uint8_t  GetDepth()      const noexcept  { return depth; }
+        constexpr Type     GetType()       const noexcept  { return type; }
+        constexpr bool     IsValid()       const noexcept  { return type != Type::Invalid; }
+        constexpr bool     IsNull()        const noexcept  { return type == Type::Null; }
+        constexpr bool     IsContainer()   const noexcept  { return type == Type::Array || type == Type::Map; }
+        constexpr bool     HasValue()      const noexcept  { return IsValid() && !IsNull() && !IsContainer(); }
 
 
         constexpr std::string_view GetFullIdentifier() const noexcept
@@ -679,7 +681,7 @@ FDF_EXPORT namespace fdf
     };
 }
 
-inline const fdf::Entry fdf::Entry::INVALID;
+inline fdf::Entry fdf::Entry::INVALID;
 
 
 
@@ -1981,7 +1983,7 @@ namespace fdf::detail
         template<Style STYLE>
         constexpr static bool WriteFileContent(std::string& buffer, std::vector<Entry>& entries, std::string& fileComment)
         {
-            return false;
+            return false;  // TODO: implement
         }
     };
 }
@@ -2059,18 +2061,95 @@ namespace fdf
         }
 
     public:
-        constexpr void WriteToBuffer(std::string& buffer) noexcept  { }
-        inline void WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) noexcept  { }
+        template<Style STYLE = {}>
+        constexpr bool WriteToBuffer(std::string& buffer) noexcept
+        {
+            return detail::Utils<ERROR_CALLBACK>::WriteFileContent(buffer, entries, fileComment);
+        }
+        template<Style STYLE = {}>
+        inline bool WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) noexcept
+        {
+            if(!std::filesystem::exists(filepath))
+            {
+                if(!bCreateIfNotExists)
+                    return false;
+
+                auto parentDir = filepath.parent_path();
+                if(!parentDir.empty() && !std::filesystem::exists(parentDir))
+                {
+                    std::error_code ec;
+                    std::filesystem::create_directories(parentDir, ec);
+                    if(ec)
+                        return false;
+                }
+            }
+            else if(!std::filesystem::is_regular_file(filepath))
+            {
+                return false;
+            }
+
+            std::string buffer;
+            if(!WriteToBuffer(buffer))
+                return false;
+
+            std::ofstream file(filepath);
+            if(!file)
+                return false;
+
+            file << buffer;
+        }
 
     public:
-        constexpr const Entry& GetEntry(std::string_view identifier) const
+        constexpr size_t GetEntryCount()         const noexcept  { return entries.size(); }
+        constexpr size_t GetTopLevelEntryCount() const noexcept  { return topLevelEntryCount; }
+
+        // Call const versions then cast away const-ness so we don't duplicate the code
+        constexpr Entry& GetEntryMutable(size_t id) noexcept
         {
-            const size_t id = detail::Utils<ERROR_CALLBACK>::FindEntry(entries, identifier, std::ranges::count(identifier, '.'), 0);
+            return const_cast<Entry&>(static_cast<const IO*>(this)->GetEntry(id));
+        }
+        constexpr Entry& GetEntryMutable(std::string_view identifier) noexcept
+        {
+            return const_cast<Entry&>(static_cast<const IO*>(this)->GetEntry(identifier));
+        }
+        constexpr Entry& GetTopLevelEntryMutable(size_t id) noexcept
+        {
+            return const_cast<Entry&>(static_cast<const IO*>(this)->GetTopLevelEntry(id));
+        }
+
+        constexpr const Entry& GetEntry(size_t id) const noexcept
+        {
             return entries.size() > id? entries[id] : Entry::INVALID;
         }
+        constexpr const Entry& GetEntry(std::string_view identifier) const noexcept
+        {
+            const size_t id = detail::Utils<ERROR_CALLBACK>::FindEntry(entries, identifier, std::ranges::count(identifier, '.'), 0);
+            return GetEntry(id);
+        }
+        constexpr const Entry& GetTopLevelEntry(size_t id) const noexcept
+        {
+            size_t currentTopLevelCount = 0;
+            for(size_t i = 0; i < entries.size() && currentTopLevelCount < topLevelEntryCount; i++)
+            {
+                if(entries[i].depth == 0)
+                {
+                    if(id == currentTopLevelCount++)
+                        return entries[i];
+                }
+            }
+
+            return Entry::INVALID;
+        }
+        
+
+        constexpr auto Iterator()               noexcept  { }  // TODO: implement
+        constexpr auto Iterator()         const noexcept  { }  // TODO: implement
+        constexpr auto TopLevelIterator()       noexcept  { }  // TODO: implement
+        constexpr auto TopLevelIterator() const noexcept  { }  // TODO: implement
 
     private:
         std::vector<Entry> entries;
+        size_t topLevelEntryCount = 0;  // TODO: implement
 
     public:
         std::string fileComment;
