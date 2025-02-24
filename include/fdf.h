@@ -1949,6 +1949,12 @@ namespace fdf::detail
     
         constexpr static bool OverrideEntry(std::vector<Entry>& entries, size_t targetID, size_t sourceID)
         {
+            // TODO: implement or completely get rid of overriding...
+            // For now, we don't allow any kind of name collision (we don't override anything)
+            return targetID == sourceID;
+
+
+            /*
             if(targetID == sourceID)
                 return true;
     
@@ -1969,6 +1975,7 @@ namespace fdf::detail
             }
     
             return false;  // Something we didn't process yet?
+            */
         }
 
 
