@@ -1061,7 +1061,6 @@ namespace fdf::detail
                     {
                         token.count = firstNonDigit - token.startPosition;
                         index = firstNonDigit;
-                        auto v = token.ToView(content);
                         return token;
                     }
 
@@ -1182,7 +1181,6 @@ namespace fdf::detail
             while(true)
             {
                 Token comment = TokenType::NonExisting;
-                Token type = TokenType::NonExisting;
                 Token currentToken = tokenizer.Current();
                 if(currentToken.type == TokenType::Invalid)
                     return false;
@@ -1303,9 +1301,8 @@ namespace fdf::detail
 
 
             // We need to peek next tokens to figure out what comment belongs to what
-            if(bHasEqual)
+            // TODO: Do we need this branch??
             {
-                Token lastToken = TokenType::NonExisting;
                 while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
                 {
                     if(currentToken.type == TokenType::Comment)
@@ -1316,58 +1313,17 @@ namespace fdf::detail
                         comment = currentToken;
                     }
 
-                    lastToken = currentToken;
                     currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
                     CHECK_TOKEN_FOR_EOF(currentToken);
                 }
 
-                if(IsValueLiteral(currentToken.type))
+                if(IsValueLiteral(currentToken.type) && (bHasEqual || bArrayElement))
                     return ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::CurlyBraceOpen)
                     return ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
                 if(currentToken.type == TokenType::SquareBraceOpen)
                     return ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
-            }
-            else
-            {
-                Token backupToken = currentToken;
-                Tokenizer backup = tokenizer;
-                std::vector<Token> comments;
-                if(comment.type != TokenType::NonExisting)
-                    comments.push_back(comment);
-
-                while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
-                {
-                    if(currentToken.type == TokenType::Comment)
-                        comments.push_back(currentToken);
-
-                    currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
-                }
-
-                auto warnComments = [&]() -> bool
-                {
-                    for(size_t i = 1; i < comments.size(); i++)
-                    {
-                        Token previous = comments[i - 1];
-                        Token current  = comments[i];
-                        if(comment.type != TokenType::NonExisting)
-                            if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("Token already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", previous.ToView(content), previous.line, previous.column, current.ToView(content), current.line, current.column)))
-                                return false;
-                    }
-
-                    if(!comments.empty())
-                        comment = comments[comments.size() - 1];
-                    return true;
-                };
-
-                if(IsValueLiteral(currentToken.type))
-                    return warnComments() && ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
-                if(currentToken.type == TokenType::CurlyBraceOpen)
-                    return warnComments() && ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
-                if(currentToken.type == TokenType::SquareBraceOpen)
-                    return warnComments() && ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
             }
     
             return false;  // Something we didn't process yet?
