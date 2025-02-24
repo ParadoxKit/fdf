@@ -5,6 +5,7 @@
 #else
     #include "fdf.h"
     #include <iostream>
+    #include <print>
 #endif
 
 
@@ -190,7 +191,7 @@ namespace fdf::detail
                 }
             }
 
-            std::cout << std::format("-----LAST SUCCESSFULLY PARSED ENTRY: {} (id: {})-----\n", lastID == -1? "<None>" : io.entries[lastID].fullIdentifier, static_cast<int64_t>(lastID));
+            std::println("-----LAST SUCCESSFULLY PARSED ENTRY: {} (id: {})-----", lastID == -1? "<None>" : io.entries[lastID].fullIdentifier, static_cast<int64_t>(lastID));
         }
 
         static bool ParseTest()
@@ -199,7 +200,7 @@ namespace fdf::detail
             for(size_t i = 0; i < filesToTest.size(); i++)
             {
                 const TestDirectories& directories = filesToTest[i];
-                std::cout << std::format("[{:02}/{:02}] {:<{}}", i + 1, filesToTest.size(), directories.inputFile, longestFilename);
+                std::print("[{:02}/{:02}] {:<{}}", i + 1, filesToTest.size(), directories.inputFile, longestFilename);
 
                 auto startTime = std::chrono::high_resolution_clock::now();
                 IO<ErrorCallback> io;
@@ -208,18 +209,17 @@ namespace fdf::detail
                 auto duration = duration_cast<std::chrono::nanoseconds>(endTime - startTime);
 
                 std::string durationString = std::format("{:.6f}ms", duration.count() / 1'000'000.0);
-                std::cout << std::format(" -- Result: {:<7} -- Took: {:<9}\n", bSuccess? "SUCCESS" : "FAIL", durationString);
+                std::println(" -- Result: {:<7} -- Took: {:<9}", bSuccess? "SUCCESS" : "FAIL", durationString);
 
                 if(!bSuccess)
                     PrintLastSuccessfullyParsedEntry(io);
 
                 if(!output.empty())
                 {
-                    std::cout << output << "\n\n";
+                    std::println("{}", output);
                     output.clear();
                 }
-                else
-                    std::cout << '\n';
+                std::println();
                 
                 PrintAllTokens(directories.inputFile, directories.tokenizedFile);
                 PrintAllEntries(io.entries, directories.entriesFile);
@@ -240,7 +240,7 @@ namespace fdf::detail
             IO io;
             if(!io.Parse(std::filesystem::path(filesToTest[0].inputFile)))
             {
-                std::cout << "Failed to parse the design file... Should never happen unless initial parse failed too!\n";
+                std::puts("Failed to parse the design file... Should never happen unless initial parse failed too!");
                 PrintLastSuccessfullyParsedEntry(io);
                 return false;
             }
@@ -251,27 +251,23 @@ namespace fdf::detail
 
             {
                 const Entry& entry = io.GetEntry("appVersion");
-                std::cout << std::format("{:<24}  ->  ", "appVersion");
+                std::print("{:<24}  ->  ", "appVersion");
                 if(entry.type == Type::Version)
                 {
                     auto val = entry.GetValue<uint64_t>();
-                    std::cout << val[0] << '.' << val[1] << '.' << val[2];
-                    if(val.size() == 4)
-                        std::cout << '.' << val[3];
-
-                    std::cout << '\n';
+                    std::println("{}.{}.{}.{}", val[0], val[1], val[2], val[3]);
                 }
                 else
                 {
                     bResult = false;
-                    std::cout << "<ERROR>\n";
+                    std::puts("<ERROR>");
                 }
             }
 
 
             {
                 const Entry& entry = io.GetEntry("uuid");
-                std::cout << std::format("{:<24}  ->  ", "uuid");
+                std::print("{:<24}  ->  ", "uuid");
                 if(entry.type == Type::String)
                 {
                     auto val = entry.GetValue<char>();
@@ -282,43 +278,43 @@ namespace fdf::detail
                         else
                             std::cout << c;
                     }
-                    std::cout << '\n';
+                    std::println();
                 }
                 else
                 {
                     bResult = false;
-                    std::cout << "<ERROR>\n";
+                    std::puts("<ERROR>");
                 }
             }
 
 
             {
                 const Entry& entry = io.GetEntry("gameSettings1.resolution");
-                std::cout << std::format("{:<24}  ->  ", "gameSettings1.resolution");
+                std::print("{:<24}  ->  ", "gameSettings1.resolution");
                 if(entry.type == Type::Int && entry.size == 2)
                 {
                     auto val = entry.GetValue<int64_t>();
-                    std::cout << val[0] << 'x' << val[1] << '\n';
+                    std::println("{}x{}", val[0], val[1]);
                 }
                 else
                 {
                     bResult = false;
-                    std::cout << "<ERROR>\n";
+                    std::puts("<ERROR>");
                 }
             }
 
 
             {
                 const Entry& entry = io.GetEntry("NON_EXISTING");
-                std::cout << std::format("{:<24}  ->  ", "NON_EXISTING");
+                std::print("{:<24}  ->  ", "NON_EXISTING");
                 if(entry.type == Type::Invalid)
                 {
-                    std::cout << "<NON_EXISTING>\n";
+                    std::puts("<NON_EXISTING>");
                 }
                 else
                 {
                     bResult = false;
-                    std::cout << "<ERROR>\n";
+                    std::puts("<ERROR>");
                 }
             }
 
@@ -331,7 +327,7 @@ namespace fdf::detail
 
         static bool WriteTest()
         {
-            std::cout << "<Placeholder>\n";
+            std::puts("<Placeholder>");
             return true;
         }
     };
@@ -366,14 +362,14 @@ int main()
     }
 
 
-    constexpr const char* separator = "--------------------------------------------------\n";
+    constexpr std::string_view separator = "--------------------------------------------------\n";
     bool bResult = true;
 
-    std::cout << std::format("Parse test -- Found {} files\n{}", filesToTest.size(), separator);
+    std::print("Parse test -- Found {} files\n{}", filesToTest.size(), separator);
     bResult = bResult && Test::ParseTest();
-    std::cout << std::format("\n{}{}\nRead test -- file: {}\n{}", separator, separator, filesToTest[0].inputFile, separator);
+    std::print("\n{1}{1}\nRead test -- file: {0}\n{1}", filesToTest[0].inputFile, separator);
     bResult = bResult && Test::ReadTest();
-    std::cout << std::format("\n{}{}\nWrite test -- file: {}\n{}", separator, separator, "<Placeholder>", separator);
+    std::print("\n{1}{1}\nWrite test -- file: {0}\n{1}", "<Placeholder>", separator);
     bResult = bResult && Test::WriteTest();
 
     return bResult? 0 : -1;
