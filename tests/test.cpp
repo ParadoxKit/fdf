@@ -373,7 +373,7 @@ int main()
     bResult = bResult && Test::ParseTest();
     std::cout << std::format("\n{}{}\nRead test -- file: {}\n{}", separator, separator, filesToTest[0].inputFile, separator);
     bResult = bResult && Test::ReadTest();
-    std::cout << std::format("\n{}{}\nRead test -- file: {}\n{}", separator, separator, "<Placeholder>", separator);
+    std::cout << std::format("\n{}{}\Write test -- file: {}\n{}", separator, separator, "<Placeholder>", separator);
     bResult = bResult && Test::WriteTest();
 
     return bResult? 0 : -1;
