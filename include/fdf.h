@@ -577,108 +577,112 @@ FDF_EXPORT namespace fdf
 
         template<typename T>
         constexpr auto GetValue() const  { }
-
-        template<>
-        constexpr auto GetValue<bool>() const
-        {
-            if(type != Type::Bool)
-                throw std::runtime_error("Non matching type is not 'bool'");
-            return data.b[0];
-        }
-
-        template<>
-        constexpr auto GetValue<int64_t>() const
-        {
-            if(type != Type::Int)
-                throw std::runtime_error("Non matching type is not 'int64_t'");
-            return std::span<const int64_t>(data.i, size);
-        }
-        template<>
-        constexpr auto GetValue<int>() const  { return GetValue<int64_t>(); }
-
-        template<>
-        constexpr auto GetValue<uint64_t>() const
-        {
-            if(type != Type::UInt && type != Type::Version)
-                throw std::runtime_error("Non matching type is not 'uint64_t'");
-            return std::span<const uint64_t>(data.u, size);
-        }
-        template<>
-        constexpr auto GetValue<unsigned int>() const  { return GetValue<uint64_t>(); }
-
-        template<>
-        constexpr auto GetValue<double>() const
-        {
-            if(type != Type::Float)
-                throw std::runtime_error("Non matching type is not 'double'");
-            return std::span<const double>(data.f, size);
-        }
-        template<>
-        constexpr auto GetValue<float>() const  { return GetValue<double>(); }
-
-        template<>
-        constexpr auto GetValue<char>() const
-        {
-            if(type != Type::String && type != Type::Hex && type != Type::Timestamp)
-                throw std::runtime_error("Non matching type is not 'string'");
-
-            if(size > detail::VARIANT_SIZE - 1)
-                return std::string_view(data.strDynamic.data, size);
-            return std::string_view(data.str, size);
-        }
-        template<>
-        constexpr auto GetValue<std::string>() const  { return GetValue<char>(); }
-        template<>
-        constexpr auto GetValue<std::string_view>() const  { return GetValue<char>(); }
-
-
-
-
         template<typename T>
         constexpr auto GetValueUnsafe() const  { }
-
-        template<>
-        constexpr auto GetValueUnsafe<bool>() const
-        {
-            return data.b[0];
-        }
-
-        template<>
-        constexpr auto GetValueUnsafe<int64_t>() const
-        {
-            return std::span<const int64_t>(data.i, size);
-        }
-        template<>
-        constexpr auto GetValueUnsafe<int>() const  { return GetValueUnsafe<int64_t>(); }
-
-        template<>
-        constexpr auto GetValueUnsafe<uint64_t>() const
-        {
-            return std::span<const uint64_t>(data.u, size);
-        }
-        template<>
-        constexpr auto GetValueUnsafe<unsigned int>() const  { return GetValueUnsafe<uint64_t>(); }
-
-        template<>
-        constexpr auto GetValueUnsafe<double>() const
-        {
-            return std::span<const double>(data.f, size);
-        }
-        template<>
-        constexpr auto GetValueUnsafe<float>() const  { return GetValueUnsafe<double>(); }
-
-        template<>
-        constexpr auto GetValueUnsafe<char>() const
-        {
-            if(size > detail::VARIANT_SIZE - 1)
-                return std::string_view(data.strDynamic.data, size);
-            return std::string_view(data.str, size);
-        }
-        template<>
-        constexpr auto GetValueUnsafe<std::string>() const  { return GetValueUnsafe<char>(); }
-        template<>
-        constexpr auto GetValueUnsafe<std::string_view>() const  { return GetValueUnsafe<char>(); }
     };
+
+
+
+
+
+    template<>
+    constexpr auto Entry::GetValue<bool>() const
+    {
+        if(type != Type::Bool)
+            throw std::runtime_error("Non matching type is not 'bool'");
+        return data.b[0];
+    }
+
+    template<>
+    constexpr auto Entry::GetValue<int64_t>() const
+    {
+        if(type != Type::Int)
+            throw std::runtime_error("Non matching type is not 'int64_t'");
+        return std::span<const int64_t>(data.i, size);
+    }
+    template<>
+    constexpr auto Entry::GetValue<int>() const { return GetValue<int64_t>(); }
+
+    template<>
+    constexpr auto Entry::GetValue<uint64_t>() const
+    {
+        if(type != Type::UInt && type != Type::Version)
+            throw std::runtime_error("Non matching type is not 'uint64_t'");
+        return std::span<const uint64_t>(data.u, size);
+    }
+    template<>
+    constexpr auto Entry::GetValue<unsigned int>() const { return GetValue<uint64_t>(); }
+
+    template<>
+    constexpr auto Entry::GetValue<double>() const
+    {
+        if(type != Type::Float)
+            throw std::runtime_error("Non matching type is not 'double'");
+        return std::span<const double>(data.f, size);
+    }
+    template<>
+    constexpr auto Entry::GetValue<float>() const { return GetValue<double>(); }
+
+    template<>
+    constexpr auto Entry::GetValue<char>() const
+    {
+        if(type != Type::String && type != Type::Hex && type != Type::Timestamp)
+            throw std::runtime_error("Non matching type is not 'string'");
+
+        if(size > detail::VARIANT_SIZE - 1)
+            return std::string_view(data.strDynamic.data, size);
+        return std::string_view(data.str, size);
+    }
+    template<>
+    constexpr auto Entry::GetValue<std::string>() const { return GetValue<char>(); }
+    template<>
+    constexpr auto Entry::GetValue<std::string_view>() const { return GetValue<char>(); }
+
+
+
+
+
+    template<>
+    constexpr auto Entry::GetValueUnsafe<bool>() const
+    {
+        return data.b[0];
+    }
+
+    template<>
+    constexpr auto Entry::GetValueUnsafe<int64_t>() const
+    {
+        return std::span<const int64_t>(data.i, size);
+    }
+    template<>
+    constexpr auto Entry::GetValueUnsafe<int>() const { return GetValueUnsafe<int64_t>(); }
+
+    template<>
+    constexpr auto Entry::GetValueUnsafe<uint64_t>() const
+    {
+        return std::span<const uint64_t>(data.u, size);
+    }
+    template<>
+    constexpr auto Entry::GetValueUnsafe<unsigned int>() const { return GetValueUnsafe<uint64_t>(); }
+
+    template<>
+    constexpr auto Entry::GetValueUnsafe<double>() const
+    {
+        return std::span<const double>(data.f, size);
+    }
+    template<>
+    constexpr auto Entry::GetValueUnsafe<float>() const { return GetValueUnsafe<double>(); }
+
+    template<>
+    constexpr auto Entry::GetValueUnsafe<char>() const
+    {
+        if(size > detail::VARIANT_SIZE - 1)
+            return std::string_view(data.strDynamic.data, size);
+        return std::string_view(data.str, size);
+    }
+    template<>
+    constexpr auto Entry::GetValueUnsafe<std::string>() const { return GetValueUnsafe<char>(); }
+    template<>
+    constexpr auto Entry::GetValueUnsafe<std::string_view>() const { return GetValueUnsafe<char>(); }
 }
 
 inline fdf::Entry fdf::Entry::INVALID;
