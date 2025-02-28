@@ -266,6 +266,54 @@ namespace fdf::detail
 
 
             {
+                const Entry& entry = io.GetEntry("name");
+                std::print("{:<24}  ->  ", "name");
+                if(entry.type == Type::String)
+                {
+                    auto val = entry.GetValue<std::string_view>();
+                    std::println("{}", val);
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
+                const Entry& entry = io.GetEntry("enabled1");
+                std::print("{:<24}  ->  ", "enabled1");
+                if(entry.type == Type::Bool)
+                {
+                    auto val = entry.GetValue<bool>();
+                    std::println("{}", val);
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
+                const Entry& entry = io.GetEntry("id");
+                std::print("{:<24}  ->  ", "id");
+                if(entry.type == Type::Int)
+                {
+                    auto val = entry.GetValue<int>();
+                    std::println("{}", val[0]);
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
                 const Entry& entry = io.GetEntry("uuid");
                 std::print("{:<24}  ->  ", "uuid");
                 if(entry.type == Type::String)
@@ -279,6 +327,52 @@ namespace fdf::detail
                             std::cout << c;
                     }
                     std::println();
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
+                const Entry& entry = io.GetEntry("pi");
+                std::print("{:<24}  ->  ", "pi");
+                if(entry.type == Type::Float)
+                {
+                    auto val = entry.GetValue<float>();
+                    std::println("{}", val[0]);
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
+                const Entry& entry = io.GetEntry("value");
+                std::print("{:<24}  ->  ", "value");
+                if(entry.type == Type::Null)
+                {
+                    std::puts("<NULL>");
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
+                const Entry& entry = io.GetEntry("value2");
+                std::print("{:<24}  ->  ", "value2");
+                if(entry.type == Type::Null)
+                {
+                    std::puts("<NULL>");
                 }
                 else
                 {

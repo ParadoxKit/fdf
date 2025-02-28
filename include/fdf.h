@@ -33,6 +33,7 @@ FDF_EXPORT namespace fdf
     {
         Invalid,
         Null,
+        Nil = Null,
 
         Bool,
         Int,
@@ -70,6 +71,7 @@ FDF_EXPORT namespace fdf
         bool bEmptyLineAtTheEndOfTheFile = true;
         bool bAlignCloseComments = true;
         bool bUseEqualSignForSingleLineArraysAndObjects = false;
+        bool bUseNilInsteadOfNull = false;
     };
 
 
@@ -117,6 +119,7 @@ namespace fdf::detail
     constexpr std::string_view EVALUATE_LITERAL_TEXT = "Evaluate Literal";
     constexpr std::string_view NONE_TEXT  = "<NONE>";
     constexpr std::string_view NULL_TEXT  = "<NULL>";
+    constexpr std::string_view NIL_TEXT   = "<NIL>";
     constexpr std::string_view TRUE_TEXT  = "<TRUE>";
     constexpr std::string_view FALSE_TEXT = "<FALSE>";
     constexpr std::string_view ARRAY_TEXT = "<ARRAY>";
@@ -134,9 +137,8 @@ namespace fdf::detail
 
     constexpr std::string_view KEYWORDS[] =
     {
-        "null",
-        "true",
-        "false",
+        "null", "nil",
+        "true", "false",
     };
     constexpr size_t KEYWORD_COUNT = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
 
@@ -493,6 +495,7 @@ FDF_EXPORT namespace fdf
         constexpr Type     GetType()       const noexcept  { return type; }
         constexpr bool     IsValid()       const noexcept  { return type != Type::Invalid; }
         constexpr bool     IsNull()        const noexcept  { return type == Type::Null; }
+        constexpr bool     IsNil()         const noexcept  { return IsNull(); }
         constexpr bool     IsContainer()   const noexcept  { return type == Type::Array || type == Type::Map; }
         constexpr bool     HasValue()      const noexcept  { return IsValid() && !IsNull() && !IsContainer(); }
 
@@ -561,9 +564,9 @@ FDF_EXPORT namespace fdf
                     return temp;
 
                 case Type::Float:
-                    temp = std::format("{}", data.f[0]);
+                    temp = std::format("{:.1f}", data.f[0]);
                     for(int i = 1; i < size; i++)
-                        temp = std::format("{}x{}", temp, data.f[i]);
+                        temp = std::format("{}x{:.1f}", temp, data.f[i]);
                     return temp;
 
                 default:
@@ -991,7 +994,7 @@ namespace fdf::detail
                     }
                 };
 
-                while(temp <= content.size())
+                while(temp < content.size())
                 {
                     lastChar = content[temp];
                     if(std::isdigit(content[temp]) || (content[temp] == '-' && lastChar == 'x'))
@@ -1363,16 +1366,16 @@ namespace fdf::detail
             
             if(currentToken.type == TokenType::Keyword)
             {
-                if(currentToken.extra8 == 0)
+                if(currentToken.extra8 == 0 || currentToken.extra8 == 1)
                 {
                     entry.type = Type::Null;
                     return postProcess();
                 }
-                if(currentToken.extra8 == 1 || currentToken.extra8 == 2)
+                if(currentToken.extra8 == 2 || currentToken.extra8 == 3)
                 {
                     entry.type = Type::Bool;
                     entry.size = 1;
-                    entry.data.b[0] = currentToken.extra8 == 1;
+                    entry.data.b[0] = currentToken.extra8 == 2;
                     return postProcess();
                 }
     
@@ -1967,7 +1970,7 @@ namespace fdf::detail
 
 
 
-namespace fdf
+FDF_EXPORT namespace fdf
 {
     template<auto ERROR_CALLBACK> requires(detail::IsValidErrorCallback<decltype(ERROR_CALLBACK)>)
     class IO

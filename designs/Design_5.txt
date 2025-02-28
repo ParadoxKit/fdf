@@ -18,9 +18,10 @@ pi=3.14              // float   - Floating point number
 resolution=1920x1080  // number2 - 2D number (can be float) (number2, int2, float2)
 scale=1.0x1.0x1.0     // number3 - 3D number (can be float) (number3, int3, float3)
 gradient=1x50x10x1    // number4 - 4D number (can be float) (number4, int4, float4)
-four=1x2x3x4x5        // number5 - 5D number (can be float) (number5, int5, float5)
+five=1x2x3x4x5        // number5 - 5D number (can be float) (number5, int5, float5)
 
 value=null                // null      - Represents absence of a value
+value2=nil                // null      - another way of saying the same thing
 color=0xFF5733#           // hex       - Hexadecimal number
 
 datetime=2024-12-24T15:30:00  // timestamp - Represents a date + time
