@@ -23,7 +23,6 @@
 // TODO: Maybe add some kind of enum type (to file format)
 // TODO: Add API to read/modify data
 // TODO: Allow multidimensional bool
-// TODO: add a way to access child Entries from parent
 
 
 
@@ -1259,6 +1258,8 @@ namespace fdf::detail
     
                 if(currentToken.type == TokenType::Identifier)
                 {
+                    topLevelEntryCount++;
+
                 #if !FDF_NO_COMMENTS
                     if(!ParseVariable(content, tokenizer, entries, comment, -1))
                         return false;
@@ -1290,7 +1291,7 @@ namespace fdf::detail
         #if !FDF_NO_COMMENTS
             Token comment,
         #endif
-            size_t parentEntryIndex, size_t* topLevelEntryCount = nullptr)
+            size_t parentEntryIndex)
         {
             const bool bHasParent    = parentEntryIndex != -1;
             const bool bArrayElement = bHasParent? entries[parentEntryIndex].type == Type::Array : false;
@@ -1328,10 +1329,6 @@ namespace fdf::detail
                 parent.size++;
                 if(!bArrayElement)
                     entry.fullIdentifier = parent.fullIdentifier + '.' + entry.fullIdentifier;
-            }
-            else if(topLevelEntryCount)
-            {
-                (*topLevelEntryCount)++;
             }
     
             bool bHasEqual = false;
@@ -2200,7 +2197,7 @@ FDF_EXPORT namespace fdf
             std::conditional_t<IS_CONST, const std::vector<Entry>&, std::vector<Entry>&> entries;
             const size_t index;
             
-                  Entry& operator*()         noexcept REQ  { return index != -1?  entries[index] :  Entry::INVALID; }
+                  Entry& operator*()        noexcept REQ  { return index != -1?  entries[index] :  Entry::INVALID; }
             const Entry& operator*()  const noexcept      { return index != -1?  entries[index] :  Entry::INVALID; }
                   Entry* operator->()       noexcept REQ  { return index != -1? &entries[index] : &Entry::INVALID; }
             const Entry* operator->() const noexcept      { return index != -1? &entries[index] : &Entry::INVALID; }
@@ -2322,7 +2319,7 @@ FDF_EXPORT namespace fdf
 
     private:
         std::vector<Entry> entries;
-        size_t topLevelEntryCount = 0;  // TODO: implement
+        size_t topLevelEntryCount = 0;
 
 #if !FDF_NO_COMMENTS
     public:
