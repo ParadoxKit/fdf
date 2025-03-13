@@ -19,6 +19,7 @@ resolution=1920x1080  // number2 - 2D number (can be float) (number2, int2, floa
 scale=1.0x1.0x1.0     // number3 - 3D number (can be float) (number3, int3, float3)
 gradient=1x50x10x1    // number4 - 4D number (can be float) (number4, int4, float4)
 five=1x2x3x4x5        // number5 - 5D number (can be float) (number5, int5, float5)
+bool40=truexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextruexfalsextruextrue
 
 value=null                // null      - Represents absence of a value
 value2=nil                // null      - another way of saying the same thing

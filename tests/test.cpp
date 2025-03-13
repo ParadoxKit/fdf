@@ -253,11 +253,12 @@ namespace fdf::detail
 
             bool bResult = true;
 
-            {
-                std::println("          Entry Count: {:>3} (should be 132) (update when editing design file)", io.GetEntryCount());
-                std::println("Top Level Entry Count: {:>3} (should be  53) (update when editing design file)", io.GetTopLevelEntryCount());
 
-                if(io.GetEntryCount() != 132 || io.GetTopLevelEntryCount() != 53)
+            {
+                std::println("          Entry Count: {:>3} (should be 133) (update when editing design file)", io.GetEntryCount());
+                std::println("Top Level Entry Count: {:>3} (should be  54) (update when editing design file)", io.GetTopLevelEntryCount());
+
+                if(io.GetEntryCount() != 133 || io.GetTopLevelEntryCount() != 54)
                 {
                     bResult = false;
                     std::puts("[ERROR]: Invalid 'Entry Count' or 'Top Level Entry Count'");
@@ -302,10 +303,10 @@ namespace fdf::detail
             {
                 auto entry = io.GetEntry("enabled1");
                 std::print("{:<24}  ->  ", "enabled1");
-                if(entry->type == Type::Bool)
+                if(entry->type == Type::Bool && entry->size == 1)
                 {
                     auto val = entry->GetValue<bool>();
-                    std::println("{}", val);
+                    std::println("{}", val[0]);
                 }
                 else
                 {

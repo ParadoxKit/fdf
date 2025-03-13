@@ -21,8 +21,8 @@
 
 // TODO: Maybe add an option to lazily evaluate? (store every value as a string and don't process anything until requested)
 // TODO: Maybe add some kind of enum type (to file format)
+// TODO: Maybe allow compact bool with std::bitset?
 // TODO: Add API to read/modify data
-// TODO: Allow multidimensional bool
 
 
 
@@ -138,7 +138,7 @@ namespace fdf::detail
     constexpr std::string_view KEYWORDS[] =
     {
         "null", "nil",
-        "true", "false",
+        "true", "false", " MD_BOOL_PLACEHOLDER "
     };
     constexpr size_t KEYWORD_COUNT = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
 
@@ -554,7 +554,6 @@ FDF_EXPORT namespace fdf
                 case Type::Null:    return detail::NULL_TEXT;
                 case Type::Array:   return detail::ARRAY_TEXT;
                 case Type::Map:     return detail::MAP_TEXT;
-                case Type::Bool:    return data.b[0]? detail::TRUE_TEXT : detail::FALSE_TEXT;
 
                 case Type::String:
                 case Type::Hex:
@@ -563,6 +562,12 @@ FDF_EXPORT namespace fdf
 
                 case Type::Version:
                     temp = std::format("{}.{}.{}.{}", data.u[0], data.u[1], data.u[2], data.u[3]);
+                    return temp;
+
+                case Type::Bool:
+                    temp = std::format("{}", (data.b[0]? detail::TRUE_TEXT : detail::FALSE_TEXT));
+                    for(int i = 1; i < size; i++)
+                        temp = std::format("{}x{}", temp, (data.b[i]? detail::TRUE_TEXT : detail::FALSE_TEXT));
                     return temp;
 
                 case Type::Int:
@@ -607,7 +612,7 @@ FDF_EXPORT namespace fdf
     {
         if(type != Type::Bool)
             throw std::runtime_error("Non matching type is not 'bool'");
-        return data.b[0];
+        return std::span<const bool>(data.b, size);
     }
 
     template<>
@@ -662,7 +667,7 @@ FDF_EXPORT namespace fdf
     template<>
     constexpr auto Entry::GetValueUnsafe<bool>() const
     {
-        return data.b[0];
+        return std::span<const bool>(data.b, size);
     }
 
     template<>
@@ -900,6 +905,12 @@ namespace fdf::detail
                         token.extra8 = i;  // Used as keyword index
                         return;
                     }
+                }
+
+                if(view.starts_with(KEYWORDS[2]) || view.starts_with(KEYWORDS[3]))
+                {
+                    token.type = TokenType::Keyword;
+                    token.extra8 = 4;  // Used as keyword index
                 }
             };
 
@@ -1424,6 +1435,66 @@ namespace fdf::detail
                     entry.type = Type::Bool;
                     entry.size = 1;
                     entry.data.b[0] = currentToken.extra8 == 2;
+                    return postProcess();
+                }
+
+                if(currentToken.extra8 == 4)
+                {
+                    entry.type = Type::Bool;
+                    entry.size = 0;
+
+                    std::string_view mdBool = currentToken.ToView(content);
+                    bool bLastWasBoolLiteral = false;
+                    while(!mdBool.empty())
+                    {
+                        if(entry.size >= VARIANT_SIZE)
+                        {
+                            entry.type = Type::Invalid;
+                            return false;
+                        }
+
+                        if(mdBool.starts_with(KEYWORDS[2]))
+                        {
+                            if(bLastWasBoolLiteral)
+                            {
+                                entry.type = Type::Invalid;
+                                return false;
+                            }
+
+                            bLastWasBoolLiteral = true;
+                            entry.data.b[entry.size++] = true;
+                            mdBool = mdBool.substr(4);
+                        }
+                        else if(mdBool.starts_with(KEYWORDS[3]))
+                        {
+                            if(bLastWasBoolLiteral)
+                            {
+                                entry.type = Type::Invalid;
+                                return false;
+                            }
+
+                            bLastWasBoolLiteral = true;
+                            entry.data.b[entry.size++] = false;
+                            mdBool = mdBool.substr(5);
+                        }
+                        else if(mdBool.starts_with('x'))
+                        {
+                            if(!bLastWasBoolLiteral)
+                            {
+                                entry.type = Type::Invalid;
+                                return false;
+                            }
+
+                            bLastWasBoolLiteral = false;
+                            mdBool = mdBool.substr(1);
+                        }
+                        else
+                        {
+                            entry.type = Type::Invalid;
+                            return false;
+                        }
+                    }
+
                     return postProcess();
                 }
     
