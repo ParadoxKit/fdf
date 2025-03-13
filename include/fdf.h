@@ -2195,7 +2195,7 @@ FDF_EXPORT namespace fdf
         struct EntryWrapper
         { 
             std::conditional_t<IS_CONST, const std::vector<Entry>&, std::vector<Entry>&> entries;
-            const size_t index;
+            const size_t index = static_cast<size_t>(-1);
             
                   Entry& operator*()        noexcept REQ  { return index != -1?  entries[index] :  Entry::INVALID; }
             const Entry& operator*()  const noexcept      { return index != -1?  entries[index] :  Entry::INVALID; }
