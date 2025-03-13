@@ -478,11 +478,11 @@ int main()
     bool bResult = true;
 
     std::print("Parse test -- Found {} files\n{}", filesToTest.size(), separator);
-    bResult = bResult && Test::ParseTest();
+    bResult = Test::ParseTest() && bResult;
     std::print("\n{1}{1}\nRead test -- file: {0}\n{1}", filesToTest[0].inputFile, separator);
-    bResult = bResult && Test::ReadTest();
+    bResult = Test::ReadTest()  && bResult;
     std::print("\n{1}{1}\nWrite test -- file: {0}\n{1}", "<Placeholder>", separator);
-    bResult = bResult && Test::WriteTest();
+    bResult = Test::WriteTest() && bResult;
 
     return bResult? 0 : -1;
 }
