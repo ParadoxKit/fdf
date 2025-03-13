@@ -255,11 +255,11 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("appVersion");
+                auto entry = io.GetEntry("appVersion");
                 std::print("{:<24}  ->  ", "appVersion");
-                if(entry.type == Type::Version)
+                if(entry->type == Type::Version)
                 {
-                    auto val = entry.GetValue<uint64_t>();
+                    auto val = entry->GetValue<uint64_t>();
                     std::println("{}.{}.{}.{}", val[0], val[1], val[2], val[3]);
                 }
                 else
@@ -271,11 +271,11 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("name");
+                auto entry = io.GetEntry("name");
                 std::print("{:<24}  ->  ", "name");
-                if(entry.type == Type::String)
+                if(entry->type == Type::String)
                 {
-                    auto val = entry.GetValue<std::string_view>();
+                    auto val = entry->GetValue<std::string_view>();
                     std::println("{}", val);
                 }
                 else
@@ -287,11 +287,11 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("enabled1");
+                auto entry = io.GetEntry("enabled1");
                 std::print("{:<24}  ->  ", "enabled1");
-                if(entry.type == Type::Bool)
+                if(entry->type == Type::Bool)
                 {
-                    auto val = entry.GetValue<bool>();
+                    auto val = entry->GetValue<bool>();
                     std::println("{}", val);
                 }
                 else
@@ -303,11 +303,11 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("id");
+                auto entry = io.GetEntry("id");
                 std::print("{:<24}  ->  ", "id");
-                if(entry.type == Type::Int)
+                if(entry->type == Type::Int)
                 {
-                    auto val = entry.GetValue<int>();
+                    auto val = entry->GetValue<int>();
                     std::println("{}", val[0]);
                 }
                 else
@@ -319,11 +319,11 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("uuid");
+                auto entry = io.GetEntry("uuid");
                 std::print("{:<24}  ->  ", "uuid");
-                if(entry.type == Type::String)
+                if(entry->type == Type::String)
                 {
-                    auto val = entry.GetValue<char>();
+                    auto val = entry->GetValue<char>();
                     for(char c : val)
                     {
                         if(c == '\n')
@@ -342,11 +342,11 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("pi");
+                auto entry = io.GetEntry("pi");
                 std::print("{:<24}  ->  ", "pi");
-                if(entry.type == Type::Float)
+                if(entry->type == Type::Float)
                 {
-                    auto val = entry.GetValue<float>();
+                    auto val = entry->GetValue<float>();
                     std::println("{}", val[0]);
                 }
                 else
@@ -358,9 +358,9 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("value");
+                auto entry = io.GetEntry("value");
                 std::print("{:<24}  ->  ", "value");
-                if(entry.type == Type::Null)
+                if(entry->type == Type::Null)
                 {
                     std::puts("<NULL>");
                 }
@@ -373,9 +373,9 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("value2");
+                auto entry = io.GetEntry("value2");
                 std::print("{:<24}  ->  ", "value2");
-                if(entry.type == Type::Null)
+                if(entry->type == Type::Null)
                 {
                     std::puts("<NULL>");
                 }
@@ -388,11 +388,11 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("gameSettings1.resolution");
+                auto entry = io.GetEntry("gameSettings1.resolution");
                 std::print("{:<24}  ->  ", "gameSettings1.resolution");
-                if(entry.type == Type::Int && entry.size == 2)
+                if(entry->type == Type::Int && entry->size == 2)
                 {
-                    auto val = entry.GetValue<int64_t>();
+                    auto val = entry->GetValue<int64_t>();
                     std::println("{}x{}", val[0], val[1]);
                 }
                 else
@@ -404,9 +404,9 @@ namespace fdf::detail
 
 
             {
-                const Entry& entry = io.GetEntry("NON_EXISTING");
+                auto entry = io.GetEntry("NON_EXISTING");
                 std::print("{:<24}  ->  ", "NON_EXISTING");
-                if(entry.type == Type::Invalid)
+                if(entry->type == Type::Invalid)
                 {
                     std::puts("<NON_EXISTING>");
                 }
@@ -417,7 +417,7 @@ namespace fdf::detail
                 }
             }
 
-
+            
             return bResult;
         }
 

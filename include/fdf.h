@@ -11,6 +11,7 @@
     #include <span>
     #include <utility>
     #include <algorithm>
+    #include <ranges>
 
     #define FDF_EXPORT
 #endif
@@ -502,7 +503,9 @@ FDF_EXPORT namespace fdf
         }
 
     public:
-        constexpr uint32_t GetChildCount() const noexcept  { return IsContainer()? size : 0; }
+        constexpr size_t GetChildCount()         const noexcept  { return IsContainer()? data.u[0] : 0; }
+        constexpr size_t GetTopLevelChildCount() const noexcept  { return IsContainer()? size : 0; }
+
         constexpr uint8_t  GetDepth()      const noexcept  { return depth; }
         constexpr Type     GetType()       const noexcept  { return type; }
         constexpr bool     IsValid()       const noexcept  { return type != Type::Invalid; }
@@ -1193,11 +1196,11 @@ namespace fdf::detail
     template<auto ERROR_CALLBACK>
     struct Utils
     {
-        constexpr static bool ParseFileContent(std::string_view content, std::vector<Entry>& entries
+        constexpr static bool ParseFileContent(std::string_view content, std::vector<Entry>& entries,
         #if !FDF_NO_COMMENTS
-            , std::string& fileComment
+            std::string& fileComment,
         #endif
-            ) noexcept
+            size_t& topLevelEntryCount) noexcept
         {
             Tokenizer tokenizer = content;
         #if !FDF_NO_COMMENTS
@@ -1287,7 +1290,7 @@ namespace fdf::detail
         #if !FDF_NO_COMMENTS
             Token comment,
         #endif
-            size_t parentEntryIndex)
+            size_t parentEntryIndex, size_t* topLevelEntryCount = nullptr)
         {
             const bool bHasParent    = parentEntryIndex != -1;
             const bool bArrayElement = bHasParent? entries[parentEntryIndex].type == Type::Array : false;
@@ -1325,6 +1328,10 @@ namespace fdf::detail
                 parent.size++;
                 if(!bArrayElement)
                     entry.fullIdentifier = parent.fullIdentifier + '.' + entry.fullIdentifier;
+            }
+            else if(topLevelEntryCount)
+            {
+                (*topLevelEntryCount)++;
             }
     
             bool bHasEqual = false;
@@ -1782,11 +1789,13 @@ namespace fdf::detail
         {
             size_t entryID = entries.size() - 1;
             entries[entryID].type = Type::Array;
+            entries[entryID].data.u[0] = 0;  // Total tree size (total child count, not just top level)
     
             Token currentToken = tokenizer.Advance();
             CHECK_TOKEN(currentToken);
             CHECK_TOKEN_FOR_EOF(currentToken);
     
+            size_t currentChildID = entryID + 1;
             while(true)
             {
             #if !FDF_NO_COMMENTS
@@ -1812,6 +1821,8 @@ namespace fdf::detail
     
                 if(IsValueLiteral(currentToken.type) || currentToken.type == TokenType::CurlyBraceOpen || currentToken.type == TokenType::SquareBraceOpen)
                 {
+                    entries[entryID].data.u[0]++;
+
                 #if !FDF_NO_COMMENTS
                     if(!ParseVariable(content, tokenizer, entries, childComment, entryID))
                         return false;
@@ -1819,6 +1830,10 @@ namespace fdf::detail
                     if(!ParseVariable(content, tokenizer, entries, entryID))
                         return false;
                 #endif
+
+                    if(entries[currentChildID].IsContainer())
+                        entries[entryID].data.u[0] += entries[currentChildID].data.u[0];
+                    currentChildID = entries.size();
     
                     currentToken = tokenizer.Current();
                     if(currentToken.type == TokenType::Comma)
@@ -1873,6 +1888,7 @@ namespace fdf::detail
         {
             size_t entryID = entries.size() - 1;
             entries[entryID].type = Type::Map;
+            entries[entryID].data.u[0] = 0;  // Total tree size (total child count, not just top level)
     
             //if(entries[entryID].typeID == 1)
             //    CopyEntryDeep(entries, userTypes, userTypeID);
@@ -1881,6 +1897,7 @@ namespace fdf::detail
             CHECK_TOKEN(currentToken);
             CHECK_TOKEN_FOR_EOF(currentToken);
 
+            size_t currentChildID = entryID + 1;
             while(true)
             {
             #if !FDF_NO_COMMENTS
@@ -1906,6 +1923,8 @@ namespace fdf::detail
     
                 if(currentToken.type == TokenType::Identifier)
                 {
+                    entries[entryID].data.u[0]++;
+
                 #if !FDF_NO_COMMENTS
                     if(!ParseVariable(content, tokenizer, entries, childComment, entryID))
                         return false;
@@ -1913,6 +1932,10 @@ namespace fdf::detail
                     if(!ParseVariable(content, tokenizer, entries, entryID))
                         return false;
                 #endif
+
+                    if(entries[currentChildID].IsContainer())
+                        entries[entryID].data.u[0] += entries[currentChildID].data.u[0];
+                    currentChildID = entries.size();
     
                     currentToken = tokenizer.Current();
                     if(currentToken.type == TokenType::Comma)
@@ -2067,10 +2090,10 @@ FDF_EXPORT namespace fdf
         {
             IO other;
         #if !FDF_NO_COMMENTS
-            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
+            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment, topLevelEntryCount))
                 return false;
         #else
-            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries))
+            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, topLevelEntryCount))
                 return false;
         #endif
 
@@ -2088,10 +2111,10 @@ FDF_EXPORT namespace fdf
             std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             IO other;
         #if !FDF_NO_COMMENTS
-            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
+            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment, topLevelEntryCount))
                 return false;
         #else
-            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries))
+            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, topLevelEntryCount))
                 return false;
         #endif
 
@@ -2120,7 +2143,9 @@ FDF_EXPORT namespace fdf
             }
         #endif
 
+            // TODO: We assume there is no name collision
             entries.insert(entries.end(), other.entries.begin(), other.entries.end());
+            topLevelEntryCount += other.topLevelEntryCount;
             return true;
         }
 
@@ -2167,53 +2192,133 @@ FDF_EXPORT namespace fdf
             file << buffer;
         }
 
+    private:
+        #define REQ requires(!IS_CONST)
+        template<bool IS_CONST>
+        struct EntryWrapper
+        { 
+            std::conditional_t<IS_CONST, const std::vector<Entry>&, std::vector<Entry>&> entries;
+            const size_t index;
+            
+                  Entry& operator*()         noexcept REQ  { return index != -1?  entries[index] :  Entry::INVALID; }
+            const Entry& operator*()  const noexcept      { return index != -1?  entries[index] :  Entry::INVALID; }
+                  Entry* operator->()       noexcept REQ  { return index != -1? &entries[index] : &Entry::INVALID; }
+            const Entry* operator->() const noexcept      { return index != -1? &entries[index] : &Entry::INVALID; }
+
+                  Entry& Get()       noexcept REQ  { return index != -1?  entries[index] :  Entry::INVALID; }
+            const Entry& Get() const noexcept      { return index != -1?  entries[index] :  Entry::INVALID; }
+
+            constexpr auto Iterator()               noexcept REQ  { return Span() | ChildFilter()                    | Wrap(); }
+            constexpr auto Iterator()         const noexcept      { return Span() | ChildFilter()                    | Wrap(); }
+            constexpr auto TopLevelIterator()       noexcept REQ  { return Span() | ChildFilter() | TopLevelFilter() | Wrap(); }
+            constexpr auto TopLevelIterator() const noexcept      { return Span() | ChildFilter() | TopLevelFilter() | Wrap(); }
+
+            constexpr size_t GetEntryCount()         const noexcept  { return entries[index].IsContainer()? entries[index].data.u[0] : 0; }
+            constexpr size_t GetTopLevelEntryCount() const noexcept  { return entries[index].IsContainer()? entries[index].size : 0; }
+
+        public:
+            // Call const versions, so we don't duplicate the code
+            constexpr EntryWrapper<false> GetEntryMutable(size_t id) noexcept
+            {
+                return {entries, static_cast<const IO*>(this)->GetEntry(id).index};
+            }
+            constexpr EntryWrapper<false> GetEntryMutable(std::string_view identifier) noexcept
+            {
+                return {entries, static_cast<const IO*>(this)->GetEntry(identifier).index};
+            }
+            constexpr EntryWrapper<false> GetTopLevelEntryMutable(size_t id) noexcept
+            {
+                return {entries, static_cast<const IO*>(this)->GetTopLevelEntry(id).index};
+            }
+
+            constexpr EntryWrapper<true> GetEntry(size_t id) const noexcept
+            {
+                return GetEntryCount() > id? EntryWrapper<true>{entries, id + index + 1} : EntryWrapper<true>{entries};
+            }
+            constexpr EntryWrapper<true> GetEntry(std::string_view identifier) const noexcept
+            {
+                const size_t id = detail::Utils<ERROR_CALLBACK>::FindEntry(entries, identifier, std::ranges::count(identifier, '.'), index);
+                return GetEntry(id);
+            }
+            constexpr EntryWrapper<true> GetTopLevelEntry(size_t id) const noexcept
+            {
+                size_t currentTopLevelCount = 0;
+                for(size_t i = index + 1; i < entries.size() && currentTopLevelCount < GetTopLevelEntryCount(); i++)
+                {
+                    if(entries[i].depth == entries[index].depth + 1)
+                    {
+                        if(id == currentTopLevelCount++)
+                            return {entries, i};
+                    }
+                }
+
+                return {entries};
+            }
+        
+        private:
+            constexpr auto Span()       noexcept REQ  { return index != -1? std::span(entries.data() + index + 1, entries[index].IsContainer()? entries[index].data.u[0] : 0) : std::span<Entry>(); }
+            constexpr auto Span() const noexcept      { return index != -1? std::span(entries.data() + index + 1, entries[index].IsContainer()? entries[index].data.u[0] : 0) : std::span<Entry>(); }
+
+            constexpr auto ChildFilter()    const noexcept  { return std::views::take_while([this](const Entry& e) { return entries[&e - entries.data()].depth > entries[index].depth; }); }
+            constexpr auto TopLevelFilter() const noexcept  { return std::views::filter(    [this](const Entry& e) { return e.depth == entries[index].depth + 1; }); }
+
+            constexpr auto Wrap()       noexcept REQ  { return std::views::transform([this](      Entry& e) { return EntryWrapper<false>{entries, static_cast<size_t>(&e - entries.data())}; }); }
+            constexpr auto Wrap() const noexcept      { return std::views::transform([this](const Entry& e) { return EntryWrapper<true >{entries, static_cast<size_t>(&e - entries.data())}; }); }
+        };
+        #undef REQ
+        
+        constexpr static auto TopLevelFilter() noexcept  { return std::views::filter([] (const Entry& e) { return e.depth == 0; }); }
+
+        constexpr auto Wrap()       noexcept  { return std::views::transform([this](      Entry& e) { return EntryWrapper<false>{entries, static_cast<size_t>(&e - entries.data())}; }); }
+        constexpr auto Wrap() const noexcept  { return std::views::transform([this](const Entry& e) { return EntryWrapper<true >{entries, static_cast<size_t>(&e - entries.data())}; }); }
+
     public:
+        constexpr auto Iterator()               noexcept  { return entries                    | Wrap(); }
+        constexpr auto Iterator()         const noexcept  { return entries                    | Wrap(); }
+        constexpr auto TopLevelIterator()       noexcept  { return entries | TopLevelFilter() | Wrap(); }
+        constexpr auto TopLevelIterator() const noexcept  { return entries | TopLevelFilter() | Wrap(); }
+
         constexpr size_t GetEntryCount()         const noexcept  { return entries.size(); }
         constexpr size_t GetTopLevelEntryCount() const noexcept  { return topLevelEntryCount; }
 
-        // Call const versions then cast away const-ness so we don't duplicate the code
-        constexpr Entry& GetEntryMutable(size_t id) noexcept
+    public:
+        // Call const versions, so we don't duplicate the code
+        constexpr EntryWrapper<false> GetEntryMutable(size_t id) noexcept
         {
-            return const_cast<Entry&>(static_cast<const IO*>(this)->GetEntry(id));
+            return {entries, static_cast<const IO*>(this)->GetEntry(id).index};
         }
-        constexpr Entry& GetEntryMutable(std::string_view identifier) noexcept
+        constexpr EntryWrapper<false> GetEntryMutable(std::string_view identifier) noexcept
         {
-            return const_cast<Entry&>(static_cast<const IO*>(this)->GetEntry(identifier));
+            return {entries, static_cast<const IO*>(this)->GetEntry(identifier).index};
         }
-        constexpr Entry& GetTopLevelEntryMutable(size_t id) noexcept
+        constexpr EntryWrapper<false> GetTopLevelEntryMutable(size_t id) noexcept
         {
-            return const_cast<Entry&>(static_cast<const IO*>(this)->GetTopLevelEntry(id));
+            return {entries, static_cast<const IO*>(this)->GetTopLevelEntry(id).index};
         }
 
-        constexpr const Entry& GetEntry(size_t id) const noexcept
+        constexpr EntryWrapper<true> GetEntry(size_t id) const noexcept
         {
-            return entries.size() > id? entries[id] : Entry::INVALID;
+            return GetEntryCount() > id? EntryWrapper<true>{entries, id} : EntryWrapper<true>{entries};
         }
-        constexpr const Entry& GetEntry(std::string_view identifier) const noexcept
+        constexpr EntryWrapper<true> GetEntry(std::string_view identifier) const noexcept
         {
             const size_t id = detail::Utils<ERROR_CALLBACK>::FindEntry(entries, identifier, std::ranges::count(identifier, '.'), 0);
             return GetEntry(id);
         }
-        constexpr const Entry& GetTopLevelEntry(size_t id) const noexcept
+        constexpr EntryWrapper<true> GetTopLevelEntry(size_t id) const noexcept
         {
             size_t currentTopLevelCount = 0;
-            for(size_t i = 0; i < entries.size() && currentTopLevelCount < topLevelEntryCount; i++)
+            for(size_t i = 0; i < entries.size() && currentTopLevelCount < GetTopLevelEntryCount(); i++)
             {
                 if(entries[i].depth == 0)
                 {
                     if(id == currentTopLevelCount++)
-                        return entries[i];
+                        return {entries, i};
                 }
             }
 
-            return Entry::INVALID;
+            return {entries};
         }
-        
-
-        constexpr auto Iterator()               noexcept  { }  // TODO: implement
-        constexpr auto Iterator()         const noexcept  { }  // TODO: implement
-        constexpr auto TopLevelIterator()       noexcept  { }  // TODO: implement
-        constexpr auto TopLevelIterator() const noexcept  { }  // TODO: implement
 
     private:
         std::vector<Entry> entries;
