@@ -1,5 +1,5 @@
 
-#if !defined(FDF_USE_CPP_MODULES)
+#if !FDF_USE_CPP_MODULES
     #include <cstdint>
     #include <type_traits>
     #include <string>
@@ -60,17 +60,17 @@ FDF_EXPORT namespace fdf
         bool bUseSpacesOverTabs = true;
         bool bParanthesisOnNewLine = true;
         bool bCommasOnArrays = true;
-        bool bCommasOnObjects = true;
+        bool bCommasOnMaps = true;
         bool bCommasOnLastElement = true;
         bool bSingleLineForShortArrays = true;
-        bool bSingleLineForShortObjects = true;
+        bool bSingleLineForShortMaps = true;
         bool bSpaceWithinParanthesis = true;
         bool bSpaceBeforeAndAfterEqualSign = false;
         bool bGroupSimilarTypes = true;
         bool bUppercaseHex = true;
         bool bEmptyLineAtTheEndOfTheFile = true;
         bool bAlignCloseComments = true;
-        bool bUseEqualSignForSingleLineArraysAndObjects = false;
+        bool bUseEqualSignForSingleLineArraysAndMaps = false;
         bool bUseNilInsteadOfNull = false;
     };
 
@@ -1295,8 +1295,6 @@ namespace fdf::detail
                     entry.fullIdentifier = parent.fullIdentifier + '.' + entry.fullIdentifier;
             }
     
-            
-    
             bool bHasEqual = false;
             if(currentToken.type == TokenType::Equal)
             {
@@ -1306,32 +1304,27 @@ namespace fdf::detail
                 CHECK_TOKEN_FOR_EOF(currentToken);
             }
 
-
-            // We need to peek next tokens to figure out what comment belongs to what
-            // TODO: Do we need this branch??
+            while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
             {
-                while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
+                if(currentToken.type == TokenType::Comment)
                 {
-                    if(currentToken.type == TokenType::Comment)
-                    {
-                        if(comment.type != TokenType::NonExisting)
-                            if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("Token already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", comment.ToView(content), comment.line, comment.column, currentToken.ToView(content), currentToken.line, currentToken.column)))
-                                return false;
-                        comment = currentToken;
-                    }
-
-                    currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
+                    if(comment.type != TokenType::NonExisting)
+                        if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("Token already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", comment.ToView(content), comment.line, comment.column, currentToken.ToView(content), currentToken.line, currentToken.column)))
+                            return false;
+                    comment = currentToken;
                 }
 
-                if(IsValueLiteral(currentToken.type) && (bHasEqual || bArrayElement))
-                    return ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
-                if(currentToken.type == TokenType::CurlyBraceOpen)
-                    return ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
-                if(currentToken.type == TokenType::SquareBraceOpen)
-                    return ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
+                currentToken = tokenizer.Advance();
+                CHECK_TOKEN(currentToken);
+                CHECK_TOKEN_FOR_EOF(currentToken);
             }
+
+            if(IsValueLiteral(currentToken.type) && (bHasEqual || bArrayElement))
+                return ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
+            if(currentToken.type == TokenType::CurlyBraceOpen)
+                return ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
+            if(currentToken.type == TokenType::SquareBraceOpen)
+                return ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
     
             return false;  // Something we didn't process yet?
         }

@@ -1,6 +1,7 @@
 
-#if defined(FDF_USE_CPP_MODULES)
+#if FDF_USE_CPP_MODULES
     import std;
+    import std.compat;
     import fdf;
 #else
     #include "fdf.h"

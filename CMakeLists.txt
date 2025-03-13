@@ -10,6 +10,7 @@ endif()
 
 
 option(FDF_USE_CPP_MODULES "Enable C++ modules" OFF)
+option(FDF_NO_COMMENTS     "Disable comment processing" OFF)
 
 
 project(fdf VERSION 0.1.0 LANGUAGES CXX)
@@ -23,13 +24,17 @@ if(FDF_USE_CPP_MODULES)
             TYPE CXX_MODULES
             FILES src/fdf.ixx
     )
-    target_compile_definitions(fdf PUBLIC FDF_USE_CPP_MODULES)
+    target_compile_definitions(fdf PUBLIC FDF_USE_CPP_MODULES=true)
+    target_compile_definitions(fdf PUBLIC FDF_NO_COMMENTS=$<IF:$<BOOL:${FDF_NO_COMMENTS}>,true,false>)
 
     target_compile_definitions(fdf PUBLIC FDF_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(fdf PUBLIC FDF_TEST_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/tests")
 else()
     add_library(fdf INTERFACE)
     target_include_directories(fdf INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+    target_compile_definitions(fdf INTERFACE FDF_USE_CPP_MODULES=false)
+    target_compile_definitions(fdf INTERFACE FDF_NO_COMMENTS=$<IF:$<BOOL:${FDF_NO_COMMENTS}>,true,false>)
 
     target_compile_definitions(fdf INTERFACE FDF_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(fdf INTERFACE FDF_TEST_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/tests")
