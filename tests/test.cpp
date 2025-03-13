@@ -245,13 +245,26 @@ namespace fdf::detail
             IO io;
             if(!io.Parse(std::filesystem::path(filesToTest[0].inputFile)))
             {
-                std::puts("Failed to parse the design file... Should never happen unless initial parse failed too!");
+                std::puts("[ERROR]: Failed to parse the design file... Should never happen unless initial parse failed too!");
                 PrintLastSuccessfullyParsedEntry(io);
                 return false;
             }
 
 
             bool bResult = true;
+
+            {
+                std::println("          Entry Count: {:>3} (should be 132) (update when editing design file)", io.GetEntryCount());
+                std::println("Top Level Entry Count: {:>3} (should be  53) (update when editing design file)", io.GetTopLevelEntryCount());
+
+                if(io.GetEntryCount() != 132 || io.GetTopLevelEntryCount() != 53)
+                {
+                    bResult = false;
+                    std::puts("[ERROR]: Invalid 'Entry Count' or 'Top Level Entry Count'");
+                }
+
+                std::println();
+            }
 
 
             {
