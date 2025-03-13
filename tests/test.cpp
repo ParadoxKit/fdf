@@ -155,7 +155,11 @@ namespace fdf::detail
             std::string temp;
             for(const Entry& entry : entries)
             {
+            #if !FDF_NO_COMMENTS
                 addToBuffer(std::format("{:<{}}Type={}--Size={:03}--Name={:<20}--Value={:<50}--Comment={}", "", 4 * entry.depth, ENTRY_TYPE_TO_STRING[static_cast<size_t>(entry.type)], entry.size, entry.fullIdentifier, entry.DataToView(temp), entry.comment));
+            #else
+                addToBuffer(std::format("{:<{}}Type={}--Size={:03}--Name={:<20}--Value={:<50}", "", 4 * entry.depth, ENTRY_TYPE_TO_STRING[static_cast<size_t>(entry.type)], entry.size, entry.fullIdentifier, entry.DataToView(temp)));
+            #endif
                 buffer.push_back('\n');
             }
 

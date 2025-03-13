@@ -412,8 +412,10 @@ FDF_EXPORT namespace fdf
         detail::Variant data;
         std::string fullIdentifier;
 
+#if !FDF_NO_COMMENTS
     public:
         std::string comment;
+#endif
 
     public:
         constexpr Entry() noexcept = default;
@@ -425,7 +427,10 @@ FDF_EXPORT namespace fdf
 
 
         constexpr Entry(const Entry& other)
-            : type(other.type), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(other.fullIdentifier), comment(other.comment)
+            : type(other.type), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(other.fullIdentifier)
+        #if !FDF_NO_COMMENTS
+            , comment(other.comment)
+        #endif
         {
             if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                 data.strDynamic = other.data.strDynamic.Copy();
@@ -433,7 +438,10 @@ FDF_EXPORT namespace fdf
                 data = other.data;
         }
         constexpr Entry(Entry&& other) noexcept
-            : type(other.type), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(std::move(other.fullIdentifier)), comment(std::move(other.comment))
+            : type(other.type), depth(other.depth), identifierSize(other.identifierSize), size(other.size), fullIdentifier(std::move(other.fullIdentifier))
+        #if !FDF_NO_COMMENTS
+            , comment(std::move(other.comment))
+        #endif
         {
             if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                 data.strDynamic = other.data.strDynamic.Move();
@@ -453,7 +461,9 @@ FDF_EXPORT namespace fdf
                 identifierSize = other.identifierSize;
                 size = other.size;
                 fullIdentifier = other.fullIdentifier;
+            #if !FDF_NO_COMMENTS
                 comment = other.comment;
+            #endif
 
                 if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                     data.strDynamic.Delete();
@@ -474,7 +484,9 @@ FDF_EXPORT namespace fdf
                 identifierSize = other.identifierSize;
                 size = other.size;
                 fullIdentifier = std::move(other.fullIdentifier);
+            #if !FDF_NO_COMMENTS
                 comment = std::move(other.comment);
+            #endif
 
                 if((type == Type::String || type == Type::Hex || type == Type::Timestamp) && size > detail::VARIANT_SIZE - 1)
                     data.strDynamic.Delete();
@@ -1181,19 +1193,27 @@ namespace fdf::detail
     template<auto ERROR_CALLBACK>
     struct Utils
     {
-        constexpr static bool ParseFileContent(std::string_view content, std::vector<Entry>& entries, std::string& fileComment) noexcept
+        constexpr static bool ParseFileContent(std::string_view content, std::vector<Entry>& entries
+        #if !FDF_NO_COMMENTS
+            , std::string& fileComment
+        #endif
+            ) noexcept
         {
             Tokenizer tokenizer = content;
+        #if !FDF_NO_COMMENTS
             Token fileCommentToken = TokenType::NonExisting;
+        #endif
             while(true)
             {
+            #if !FDF_NO_COMMENTS
                 Token comment = TokenType::NonExisting;
+            #endif
                 Token currentToken = tokenizer.Current();
-                if(currentToken.type == TokenType::Invalid)
-                    return false;
+                CHECK_TOKEN(currentToken);
     
                 while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
                 {
+                #if !FDF_NO_COMMENTS
                     if(currentToken.type == TokenType::Comment)
                     {
                         if(entries.empty() && fileComment.empty() && currentToken.count > 0 && content[currentToken.startPosition] == '#')
@@ -1229,14 +1249,20 @@ namespace fdf::detail
                             comment = currentToken;
                         }
                     }
+                #endif
     
                     currentToken = tokenizer.Advance();
                 }
     
                 if(currentToken.type == TokenType::Identifier)
                 {
+                #if !FDF_NO_COMMENTS
                     if(!ParseVariable(content, tokenizer, entries, comment, -1))
                         return false;
+                #else
+                    if(!ParseVariable(content, tokenizer, entries, -1))
+                        return false;
+                #endif
     
                     continue;
                 }
@@ -1247,15 +1273,21 @@ namespace fdf::detail
                 return false;  // First token can't be anything else
             }
 
+        #if !FDF_NO_COMMENTS
             if(fileCommentToken.type != TokenType::NonExisting)
                 fileComment = fileCommentToken.ToView(content);
+        #endif
             return true;
         }
     
     
     
     
-        constexpr static bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, Token comment, size_t parentEntryIndex)
+        constexpr static bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries,
+        #if !FDF_NO_COMMENTS
+            Token comment,
+        #endif
+            size_t parentEntryIndex)
         {
             const bool bHasParent    = parentEntryIndex != -1;
             const bool bArrayElement = bHasParent? entries[parentEntryIndex].type == Type::Array : false;
@@ -1306,6 +1338,7 @@ namespace fdf::detail
 
             while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
             {
+            #if !FDF_NO_COMMENTS
                 if(currentToken.type == TokenType::Comment)
                 {
                     if(comment.type != TokenType::NonExisting)
@@ -1313,18 +1346,28 @@ namespace fdf::detail
                             return false;
                     comment = currentToken;
                 }
+            #endif
 
                 currentToken = tokenizer.Advance();
                 CHECK_TOKEN(currentToken);
                 CHECK_TOKEN_FOR_EOF(currentToken);
             }
 
+        #if !FDF_NO_COMMENTS
             if(IsValueLiteral(currentToken.type) && (bHasEqual || bArrayElement))
                 return ParseSimpleValue(content, tokenizer, entry, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
             if(currentToken.type == TokenType::CurlyBraceOpen)
                 return ParseMap(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
             if(currentToken.type == TokenType::SquareBraceOpen)
                 return ParseArray(content, tokenizer, entries, comment) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
+        #else
+            if(IsValueLiteral(currentToken.type) && (bHasEqual || bArrayElement))
+                return ParseSimpleValue(content, tokenizer, entry) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
+            if(currentToken.type == TokenType::CurlyBraceOpen)
+                return ParseMap(content, tokenizer, entries) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
+            if(currentToken.type == TokenType::SquareBraceOpen)
+                return ParseArray(content, tokenizer, entries) && OverrideEntry(entries, FindEntry(entries, entries[currentEntryIndex].fullIdentifier, entries[currentEntryIndex].depth, bHasParent? parentEntryIndex + 1 : 0), currentEntryIndex);
+        #endif
     
             return false;  // Something we didn't process yet?
         }
@@ -1332,7 +1375,11 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseSimpleValue(std::string_view content, Tokenizer& tokenizer, Entry& entry, Token comment)
+        constexpr static bool ParseSimpleValue(std::string_view content, Tokenizer& tokenizer, Entry& entry
+        #if !FDF_NO_COMMENTS
+            , Token comment
+        #endif
+            )
         {
             Token currentToken = tokenizer.Current();
             std::string_view view = currentToken.ToView(content);
@@ -1342,18 +1389,22 @@ namespace fdf::detail
                 currentToken = tokenizer.Advance();
                 if(currentToken.type == TokenType::Comment)
                 {
+                #if !FDF_NO_COMMENTS
                     if(comment.type != TokenType::NonExisting)
                         if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("Token already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", comment.ToView(content), comment.line, comment.column, currentToken.ToView(content), currentToken.line, currentToken.column)))
                             return false;
                     comment = currentToken;
+                #endif
                     currentToken = tokenizer.Advance();
                 }
     
                 if(currentToken.type == TokenType::NewLine)
                     tokenizer.Advance();
 
+            #if !FDF_NO_COMMENTS
                 if(comment.type != TokenType::NonExisting)
                     entry.comment = comment.ToView(content);
+            #endif
                 return true;
             };
             
@@ -1723,7 +1774,11 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, Token comment)
+        constexpr static bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries
+        #if !FDF_NO_COMMENTS
+            , Token comment
+        #endif
+            )
         {
             size_t entryID = entries.size() - 1;
             entries[entryID].type = Type::Array;
@@ -1734,9 +1789,12 @@ namespace fdf::detail
     
             while(true)
             {
+            #if !FDF_NO_COMMENTS
                 Token childComment;
+            #endif
                 while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
                 {
+                #if !FDF_NO_COMMENTS
                     if(currentToken.type == TokenType::Comment)
                     {
                         if(childComment.type != TokenType::NonExisting)
@@ -1744,6 +1802,7 @@ namespace fdf::detail
                                 return false;
                         childComment = currentToken;
                     }
+                #endif
     
                     currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
@@ -1753,8 +1812,13 @@ namespace fdf::detail
     
                 if(IsValueLiteral(currentToken.type) || currentToken.type == TokenType::CurlyBraceOpen || currentToken.type == TokenType::SquareBraceOpen)
                 {
+                #if !FDF_NO_COMMENTS
                     if(!ParseVariable(content, tokenizer, entries, childComment, entryID))
                         return false;
+                #else
+                    if(!ParseVariable(content, tokenizer, entries, entryID))
+                        return false;
+                #endif
     
                     currentToken = tokenizer.Current();
                     if(currentToken.type == TokenType::Comma)
@@ -1771,10 +1835,12 @@ namespace fdf::detail
 
                     if(currentToken.type == TokenType::Comment)
                     {
+                    #if !FDF_NO_COMMENTS
                         if(comment.type != TokenType::NonExisting)
                             if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("Token already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", comment.ToView(content), comment.line, comment.column, currentToken.ToView(content), currentToken.line, currentToken.column)))
                                 return false;
                         comment = currentToken;
+                    #endif
                         currentToken = tokenizer.Advance();
                         CHECK_TOKEN(currentToken);
                     }
@@ -1785,8 +1851,10 @@ namespace fdf::detail
                         CHECK_TOKEN(currentToken);
                     }
 
+                #if !FDF_NO_COMMENTS
                     if(comment.type != TokenType::NonExisting)
                         entries[entryID].comment = comment.ToView(content);
+                #endif
                     return true;
                 }
                 else
@@ -1797,7 +1865,11 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries, Token comment)
+        constexpr static bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries
+        #if !FDF_NO_COMMENTS
+            , Token comment
+        #endif
+            )
         {
             size_t entryID = entries.size() - 1;
             entries[entryID].type = Type::Map;
@@ -1811,9 +1883,12 @@ namespace fdf::detail
 
             while(true)
             {
+            #if !FDF_NO_COMMENTS
                 Token childComment;
+            #endif
                 while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
                 {
+                #if !FDF_NO_COMMENTS
                     if(currentToken.type == TokenType::Comment)
                     {
                         if(childComment.type != TokenType::NonExisting)
@@ -1821,6 +1896,7 @@ namespace fdf::detail
                                 return false;
                         childComment = currentToken;
                     }
+                #endif
     
                     currentToken = tokenizer.Advance();
                     CHECK_TOKEN(currentToken);
@@ -1830,8 +1906,13 @@ namespace fdf::detail
     
                 if(currentToken.type == TokenType::Identifier)
                 {
+                #if !FDF_NO_COMMENTS
                     if(!ParseVariable(content, tokenizer, entries, childComment, entryID))
                         return false;
+                #else
+                    if(!ParseVariable(content, tokenizer, entries, entryID))
+                        return false;
+                #endif
     
                     currentToken = tokenizer.Current();
                     if(currentToken.type == TokenType::Comma)
@@ -1848,10 +1929,12 @@ namespace fdf::detail
 
                     if(currentToken.type == TokenType::Comment)
                     {
+                    #if !FDF_NO_COMMENTS
                         if(comment.type != TokenType::NonExisting)
                             if(!ERROR_CALLBACK(Error::AlreadyHasComment, std::format("Token already has a comment\nOld Comment: \"{}\" ({}:{})\nNew Comment: \"{}\" ({}:{})", comment.ToView(content), comment.line, comment.column, currentToken.ToView(content), currentToken.line, currentToken.column)))
                                 return false;
                         comment = currentToken;
+                    #endif
                         currentToken = tokenizer.Advance();
                         CHECK_TOKEN(currentToken);
                     }
@@ -1862,8 +1945,10 @@ namespace fdf::detail
                         CHECK_TOKEN(currentToken);
                     }
 
+                #if !FDF_NO_COMMENTS
                     if(comment.type != TokenType::NonExisting)
                         entries[entryID].comment = comment.ToView(content);
+                #endif
                     return true;
                 }
                 else
@@ -1944,7 +2029,11 @@ namespace fdf::detail
 
 
         template<Style STYLE>
-        constexpr static bool WriteFileContent(std::string& buffer, std::vector<Entry>& entries, std::string& fileComment)
+        constexpr static bool WriteFileContent(std::string& buffer, std::vector<Entry>& entries
+        #if !FDF_NO_COMMENTS
+            , std::string& fileComment
+        #endif
+            )
         {
             return false;  // TODO: implement
         }
@@ -1977,8 +2066,13 @@ FDF_EXPORT namespace fdf
         constexpr bool Parse(std::string_view content, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
         {
             IO other;
+        #if !FDF_NO_COMMENTS
             if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
                 return false;
+        #else
+            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries))
+                return false;
+        #endif
 
             return Combine(other, fileCommentCombineStrategy);
         }
@@ -1993,14 +2087,20 @@ FDF_EXPORT namespace fdf
 
             std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             IO other;
+        #if !FDF_NO_COMMENTS
             if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries, other.fileComment))
                 return false;
+        #else
+            if(!detail::Utils<ERROR_CALLBACK>::ParseFileContent(content, other.entries))
+                return false;
+        #endif
 
             return Combine(other, fileCommentCombineStrategy);
         }
         template<auto OTHER_ERROR_CALLBACK>
         constexpr bool Combine(const IO<OTHER_ERROR_CALLBACK>& other, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
         {
+        #if !FDF_NO_COMMENTS
             switch(fileCommentCombineStrategy)
             {
                 case CommentCombineStrategy::UseExisting: break;
@@ -2018,6 +2118,7 @@ FDF_EXPORT namespace fdf
                 case CommentCombineStrategy::Clear: fileComment.clear(); break;
                 default: std::unreachable();
             }
+        #endif
 
             entries.insert(entries.end(), other.entries.begin(), other.entries.end());
             return true;
@@ -2027,7 +2128,11 @@ FDF_EXPORT namespace fdf
         template<Style STYLE = {}>
         constexpr bool WriteToBuffer(std::string& buffer) noexcept
         {
+        #if !FDF_NO_COMMENTS
             return detail::Utils<ERROR_CALLBACK>::WriteFileContent(buffer, entries, fileComment);
+        #else
+            return detail::Utils<ERROR_CALLBACK>::WriteFileContent(buffer, entries);
+        #endif
         }
         template<Style STYLE = {}>
         inline bool WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) noexcept
@@ -2114,8 +2219,10 @@ FDF_EXPORT namespace fdf
         std::vector<Entry> entries;
         size_t topLevelEntryCount = 0;  // TODO: implement
 
+#if !FDF_NO_COMMENTS
     public:
         std::string fileComment;
+#endif
     };
 }
 
