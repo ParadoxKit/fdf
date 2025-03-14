@@ -52,9 +52,6 @@ FDF_EXPORT namespace fdf
 
     struct Style
     {
-        consteval Style() noexcept = default;
-
-    public:
         uint8_t singleLineCommentLimit = 80;
         uint8_t tabSize = 4;
         bool bUseSpacesOverTabs = true;
@@ -64,6 +61,7 @@ FDF_EXPORT namespace fdf
         bool bCommasOnLastElement = true;
         bool bSingleLineForShortArrays = true;
         bool bSingleLineForShortMaps = true;
+        bool bSpaceAfterComma = true;
         bool bSpaceWithinParanthesis = true;
         bool bSpaceBeforeAndAfterEqualSign = false;
         bool bGroupSimilarTypes = true;
@@ -72,6 +70,7 @@ FDF_EXPORT namespace fdf
         bool bAlignCloseComments = true;
         bool bUseEqualSignForSingleLineArraysAndMaps = false;
         bool bUseNilInsteadOfNull = false;
+        bool bAlwaysUseDoubleQuoteForStrings = false;
     };
 
 
@@ -117,13 +116,9 @@ FDF_EXPORT namespace fdf
 namespace fdf::detail
 {
     constexpr std::string_view EVALUATE_LITERAL_TEXT = "Evaluate Literal";
-    constexpr std::string_view NONE_TEXT  = "<NONE>";
-    constexpr std::string_view NULL_TEXT  = "<NULL>";
-    constexpr std::string_view NIL_TEXT   = "<NIL>";
-    constexpr std::string_view TRUE_TEXT  = "<TRUE>";
-    constexpr std::string_view FALSE_TEXT = "<FALSE>";
-    constexpr std::string_view ARRAY_TEXT = "<ARRAY>";
-    constexpr std::string_view MAP_TEXT   = "<MAP>";
+    constexpr std::string_view INVALID_TEXT = "<INVALID>";
+    constexpr std::string_view ARRAY_TEXT   = "<ARRAY>";
+    constexpr std::string_view MAP_TEXT     = "<MAP>";
 
     constexpr uint64_t  INT64_MAX_VALUE = std::numeric_limits< int64_t>::max();
     constexpr uint64_t UINT64_MAX_VALUE = std::numeric_limits<uint64_t>::max();
@@ -546,12 +541,13 @@ FDF_EXPORT namespace fdf
         }
 
 
+        template<bool bUseNilInsteadOfNull = false>
         constexpr std::string_view DataToView(std::string& temp) const
         {
             switch(type)
             {
-                case Type::Invalid: return detail::NONE_TEXT;
-                case Type::Null:    return detail::NULL_TEXT;
+                case Type::Invalid: return detail::INVALID_TEXT;
+                case Type::Null:    if constexpr(bUseNilInsteadOfNull) return detail::KEYWORDS[1]; return detail::KEYWORDS[0];
                 case Type::Array:   return detail::ARRAY_TEXT;
                 case Type::Map:     return detail::MAP_TEXT;
 
@@ -561,13 +557,16 @@ FDF_EXPORT namespace fdf
                     return size > detail::VARIANT_SIZE - 1? data.strDynamic.view.substr(0, size) : std::string_view(data.str, size);
 
                 case Type::Version:
-                    temp = std::format("{}.{}.{}.{}", data.u[0], data.u[1], data.u[2], data.u[3]);
+                    if(data.u[3] == 0)
+                        temp = std::format("{}.{}.{}", data.u[0], data.u[1], data.u[2]);
+                    else
+                        temp = std::format("{}.{}.{}.{}", data.u[0], data.u[1], data.u[2], data.u[3]);
                     return temp;
 
                 case Type::Bool:
-                    temp = std::format("{}", (data.b[0]? detail::TRUE_TEXT : detail::FALSE_TEXT));
+                    temp = std::format("{}", (data.b[0]? detail::KEYWORDS[2] : detail::KEYWORDS[3]));
                     for(int i = 1; i < size; i++)
-                        temp = std::format("{}x{}", temp, (data.b[i]? detail::TRUE_TEXT : detail::FALSE_TEXT));
+                        temp = std::format("{}x{}", temp, (data.b[i]? detail::KEYWORDS[2] : detail::KEYWORDS[3]));
                     return temp;
 
                 case Type::Int:
@@ -1290,7 +1289,7 @@ namespace fdf::detail
 
         #if !FDF_NO_COMMENTS
             if(fileCommentToken.type != TokenType::NonExisting)
-                fileComment = fileCommentToken.ToView(content);
+                TrimWhitespaceMultilineInPlace(fileCommentToken.ToView(content), fileComment);
         #endif
             return true;
         }
@@ -1337,6 +1336,9 @@ namespace fdf::detail
                     return false;  // Unexpected parsing error
     
                 entry.depth = parent.depth + 1;
+                if(entry.depth == 0)
+                    throw std::runtime_error("Max depth(255) is exceeded");
+
                 parent.size++;
                 if(!bArrayElement)
                     entry.fullIdentifier = parent.fullIdentifier + '.' + entry.fullIdentifier;
@@ -2120,13 +2122,160 @@ namespace fdf::detail
 
 
         template<Style STYLE>
-        constexpr static bool WriteFileContent(std::string& buffer, std::vector<Entry>& entries
+        constexpr static bool WriteFileContent(std::string& buffer, const std::vector<Entry>& entries
         #if !FDF_NO_COMMENTS
-            , std::string& fileComment
+            , const std::string& fileComment
         #endif
             )
         {
-            return false;  // TODO: implement
+            auto isShortContainer = [](const Entry& e)  { return e.data.u[0] < 10; };
+            auto addTab = [&](size_t count)
+            {
+                if constexpr(STYLE.bUseSpacesOverTabs)
+                    buffer.append(count * STYLE.tabSize, ' ');
+                else
+                    buffer.append(count, '\t');
+            };
+            auto addEqualSign = [&]()
+            {
+                if constexpr(STYLE.bSpaceBeforeAndAfterEqualSign)
+                    buffer.append(" = ");
+                else
+                    buffer.push_back('=');
+            };
+
+            auto writeLambda = [&](std::ranges::range auto&& order) -> bool
+            {
+                buffer.clear();
+                buffer.reserve(entries.size() * 50);
+
+            #if !FDF_NO_COMMENTS
+                if(!fileComment.empty())
+                {
+                    buffer.append("/*#\n");
+                    size_t prevNewLinePos = -1;
+                    size_t newLinePos = fileComment.find_first_of('\n');
+                    while(newLinePos != std::string::npos)
+                    {
+                        addTab(1);
+                        buffer.append(fileComment, prevNewLinePos + 1, newLinePos - prevNewLinePos);
+                        prevNewLinePos = newLinePos;
+                        newLinePos = fileComment.find_first_of('\n', newLinePos + 1);
+                    }
+                    addTab(1);
+                    buffer.append(fileComment, prevNewLinePos + 1);
+                    buffer.append("\n*/\n\n\n");
+                }
+            #endif
+
+                auto writeEntryValue = [&](const Entry& e) -> void
+                {
+                    std::string temp;
+                    std::string_view view = e.DataToView<STYLE.bUseNilInsteadOfNull>(temp);
+                    if(e.type != Type::String)
+                    {
+                        buffer.append(view);
+                    }
+                    else
+                    {
+                        bool bContainsQuote = view.find_first_of('\"') != std::string_view::npos; // does it contain double quote?
+                        if(bContainsQuote)
+                        {
+                            if constexpr(STYLE.bAlwaysUseDoubleQuoteForStrings)
+                            {
+                                buffer.push_back('\"');
+                                for(char c : view)
+                                {
+                                    if(c == '\"')
+                                        buffer.append("\\\"");
+                                    else
+                                        buffer.push_back(c);
+                                }
+                                buffer.push_back('\"');
+                            }
+                            else
+                            {
+                                bContainsQuote = view.find_first_of('\'') != std::string_view::npos; // does it contain single quote?
+                                if(bContainsQuote)
+                                {
+                                    buffer.push_back('\"');
+                                    for(char c : view)
+                                    {
+                                        if(c == '\"')
+                                            buffer.append("\\\"");
+                                        else
+                                            buffer.push_back(c);
+                                    }
+                                    buffer.push_back('\"');
+                                }
+                                else
+                                {
+                                    buffer.push_back('\'');
+                                    buffer.append(view);
+                                    buffer.push_back('\'');
+                                }
+                            }
+                        }
+                        else
+                        {
+                            buffer.push_back('\"');
+                            buffer.append(view);
+                            buffer.push_back('\"');
+                        }
+                    }
+                };
+
+                // TODO: implement
+                return false;
+            };
+
+
+
+
+            if constexpr(STYLE.bGroupSimilarTypes)
+            {
+                std::vector<size_t> sortVec;
+                sortVec.reserve(entries.size());
+
+                auto sortFn = [&entries, &sortVec](auto&& sortFn, uint8_t depth, size_t startIndex) -> void
+                {
+                    for(size_t i = startIndex; i < entries.size(); i++)
+                    {
+                        if(entries[i].depth < depth)
+                            break;
+                        if(entries[i].depth == depth && !entries[i].IsContainer())
+                            sortVec.push_back(i);
+                    }
+
+                    for(size_t i = startIndex; i < entries.size(); i++)
+                    {
+                        if(entries[i].depth < depth)
+                            break;
+                        if(entries[i].depth == depth && entries[i].type == Type::Array)
+                        {
+                            sortVec.push_back(i);
+                            sortFn(sortFn, depth + 1, i + 1);
+                        }
+                    }
+
+                    for(size_t i = startIndex; i < entries.size(); i++)
+                    {
+                        if(entries[i].depth < depth)
+                            break;
+                        if(entries[i].depth == depth && entries[i].type == Type::Map)
+                        {
+                            sortVec.push_back(i);
+                            sortFn(sortFn, depth + 1, i + 1);
+                        }
+                    }
+                };
+                sortFn(sortFn, 0, 0);
+                return writeLambda(sortVec);
+            }
+            else
+            {
+                return writeLambda(std::views::iota(static_cast<size_t>(0), entries.size()));
+            }
         }
     };
 }
@@ -2154,7 +2303,7 @@ FDF_EXPORT namespace fdf
         constexpr IO() noexcept = default;
 
     public:
-        constexpr bool Parse(std::string_view content, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
+        constexpr bool Parse(std::string_view content, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseNewIfExistingIsEmpty) noexcept
         {
             IO other;
         #if !FDF_NO_COMMENTS
@@ -2167,7 +2316,7 @@ FDF_EXPORT namespace fdf
 
             return Combine(other, fileCommentCombineStrategy);
         }
-        inline bool Parse(std::filesystem::path filepath, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
+        inline bool Parse(std::filesystem::path filepath, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseNewIfExistingIsEmpty) noexcept
         {
             if(!std::filesystem::exists(filepath) || !std::filesystem::is_regular_file(filepath))
                 return false;
@@ -2189,7 +2338,7 @@ FDF_EXPORT namespace fdf
             return Combine(other, fileCommentCombineStrategy);
         }
         template<auto OTHER_ERROR_CALLBACK>
-        constexpr bool Combine(const IO<OTHER_ERROR_CALLBACK>& other, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseExisting) noexcept
+        constexpr bool Combine(const IO<OTHER_ERROR_CALLBACK>& other, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseNewIfExistingIsEmpty) noexcept
         {
         #if !FDF_NO_COMMENTS
             switch(fileCommentCombineStrategy)
@@ -2219,16 +2368,16 @@ FDF_EXPORT namespace fdf
 
     public:
         template<Style STYLE = {}>
-        constexpr bool WriteToBuffer(std::string& buffer) noexcept
+        constexpr bool WriteToBuffer(std::string& buffer) const noexcept
         {
         #if !FDF_NO_COMMENTS
-            return detail::Utils<ERROR_CALLBACK>::WriteFileContent(buffer, entries, fileComment);
+            return detail::Utils<ERROR_CALLBACK>::WriteFileContent<STYLE>(buffer, entries, fileComment);
         #else
-            return detail::Utils<ERROR_CALLBACK>::WriteFileContent(buffer, entries);
+            return detail::Utils<ERROR_CALLBACK>::WriteFileContent<STYLE>(buffer, entries);
         #endif
         }
         template<Style STYLE = {}>
-        inline bool WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) noexcept
+        inline bool WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) const noexcept
         {
             if(!std::filesystem::exists(filepath))
             {

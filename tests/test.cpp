@@ -376,7 +376,7 @@ namespace fdf::detail
                 std::print("{:<24}  ->  ", "value");
                 if(entry->type == Type::Null)
                 {
-                    std::puts("<NULL>");
+                    std::puts("null");
                 }
                 else
                 {
@@ -391,7 +391,7 @@ namespace fdf::detail
                 std::print("{:<24}  ->  ", "value2");
                 if(entry->type == Type::Null)
                 {
-                    std::puts("<NULL>");
+                    std::puts("null");
                 }
                 else
                 {
@@ -440,7 +440,16 @@ namespace fdf::detail
 
         static bool WriteTest()
         {
-            std::puts("<Placeholder>");
+            IO io;
+            if(!io.Parse(std::filesystem::path(filesToTest[0].inputFile)))
+            {
+                std::puts("[ERROR]: Failed to parse the file!");
+                PrintLastSuccessfullyParsedEntry(io);
+                return false;
+            }
+
+            std::string buffer;
+            io.WriteToBuffer<Style{.bCommasOnLastElement = false}>(buffer);
             return true;
         }
     };
