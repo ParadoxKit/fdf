@@ -2528,7 +2528,7 @@ namespace fdf::detail
                 std::vector<size_t> sortVec;
                 sortVec.reserve(entries.size());
 
-                auto sortFn = [&entries, &sortVec](auto&& sortFn, uint8_t depth, size_t startIndex) -> void
+                auto sortFn = [&entries, &sortVec](this auto self, uint8_t depth, size_t startIndex) -> void
                 {
                     for(size_t i = startIndex; i < entries.size(); i++)
                     {
@@ -2545,7 +2545,7 @@ namespace fdf::detail
                         if(entries[i].depth == depth && entries[i].type == Type::Array)
                         {
                             sortVec.push_back(i);
-                            sortFn(sortFn, depth + 1, i + 1);
+                            self(depth + 1, i + 1);
                         }
                     }
 
@@ -2556,11 +2556,11 @@ namespace fdf::detail
                         if(entries[i].depth == depth && entries[i].type == Type::Map)
                         {
                             sortVec.push_back(i);
-                            sortFn(sortFn, depth + 1, i + 1);
+                            self(depth + 1, i + 1);
                         }
                     }
                 };
-                sortFn(sortFn, 0, 0);
+                sortFn(0, 0);
                 writeLambda(sortVec);
             }
             else
