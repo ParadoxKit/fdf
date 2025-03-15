@@ -90,13 +90,14 @@ namespace fdf::detail
 
     struct Test
     {
-        static void PrintAllTokens(std::string_view inFile, std::string_view outFile)
+        static bool PrintAllTokens(std::string_view inFile, std::string_view outFile)
         {
-            std::ifstream file(inFile.data());
-            if(!file)
-                return;
+            std::ifstream iFile(inFile.data());
+            std::ofstream oFile(outFile.data());
+            if(!iFile || !oFile)
+                return false;
 
-            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            std::string content((std::istreambuf_iterator<char>(iFile)), std::istreambuf_iterator<char>());
             Tokenizer tokenizer = Tokenizer(content);
         
             std::vector<Token> tokens;
@@ -133,13 +134,16 @@ namespace fdf::detail
                 tokenIndex++;
             }
         
-            std::ofstream outfile(outFile.data());
-            if(outfile.is_open())
-                outfile << buffer;
+            oFile << buffer;
+            return static_cast<bool>(oFile);
         }
 
-        static void PrintAllEntries(const std::vector<Entry>& entries, std::string_view outFile)
+        static bool PrintAllEntries(const std::vector<Entry>& entries, std::string_view outFile)
         {
+            std::ofstream file(outFile.data());
+            if(!file)
+                return false;
+
             std::string buffer;
             auto addToBuffer = [&buffer](std::string_view value)
             {
@@ -163,9 +167,14 @@ namespace fdf::detail
                 buffer.push_back('\n');
             }
 
-            std::ofstream outfile(outFile.data());
-            if(outfile.is_open())
-                outfile << buffer;
+            file << buffer;
+            return static_cast<bool>(file);
+        }
+
+        template<Style STYLE = {}>
+        static bool PrintFile(const auto& io, std::string_view outFile)
+        {
+            return io.WriteToFile<STYLE>(outFile);
         }
 
 
@@ -228,6 +237,7 @@ namespace fdf::detail
                 
                 PrintAllTokens(directories.inputFile, directories.tokenizedFile);
                 PrintAllEntries(io.entries, directories.entriesFile);
+                PrintFile(io, directories.outputFile);
 
                 bResult = bResult && bSuccess;
             }
@@ -441,16 +451,10 @@ namespace fdf::detail
         static bool WriteTest()
         {
             IO io;
-            if(!io.Parse(std::filesystem::path(filesToTest[0].inputFile)))
-            {
-                std::puts("[ERROR]: Failed to parse the file!");
-                PrintLastSuccessfullyParsedEntry(io);
-                return false;
-            }
 
-            std::string buffer;
-            io.WriteToBuffer<Style{.bCommasOnLastElement = false}>(buffer);
-            return true;
+            std::puts("<Placeholder>");
+
+            return io.WriteToFile<Style{.bCommasOnLastElement = false}>(FDF_TEST_DIRECTORY "/output/WriteTest.txt");;
         }
     };
 }

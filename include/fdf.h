@@ -1,4 +1,13 @@
 
+// TODO: Maybe add an option to lazily evaluate? (store every value as a string and don't process anything until requested)
+// TODO: Maybe add some kind of enum type (to file format)
+// TODO: Maybe allow compact bool with std::bitset?
+// TODO: Add API to read/modify data
+// TODO: Look into error callback. Can we make it better?
+
+
+
+
 #if !FDF_USE_CPP_MODULES
     #include <cstdint>
     #include <type_traits>
@@ -19,10 +28,9 @@
 
 
 
-// TODO: Maybe add an option to lazily evaluate? (store every value as a string and don't process anything until requested)
-// TODO: Maybe add some kind of enum type (to file format)
-// TODO: Maybe allow compact bool with std::bitset?
-// TODO: Add API to read/modify data
+#define FDF_CHECK_TOKEN(TOKEN)         do { if(TOKEN.type == TokenType::Invalid  ) return false; } while (false)
+#define FDF_CHECK_TOKEN_FOR_EOF(TOKEN) do { if(TOKEN.type == TokenType::EndOfFile) return false; } while (false)
+#define FDF_FORWARD_ERROR(Cond)        do { if(!(Cond))                            return false; } while (false)
 
 
 
@@ -52,23 +60,34 @@ FDF_EXPORT namespace fdf
 
     struct Style
     {
-        uint8_t singleLineCommentLimit = 80;
-        uint8_t tabSize = 4;
+        // Spacing
         bool bUseSpacesOverTabs = true;
-        bool bParanthesisOnNewLine = true;
+        uint8_t tabSize = 4;
+        bool bSpaceAfterComma = true;
+        bool bSpaceWithinParentheses = true;
+        bool bSpaceBeforeAndAfterEqualSign = false;
+        bool bParenthesesOnNewLine = true;
+        bool bEmptyLineAtEOF = true;
+
+        // Comment
+        bool bFileComment = true;
+        bool bEntryComment = true;       // TODO: implement
+        bool bAlignCloseComments = true; // TODO: implement
+
+        // Single-line limits
+        uint8_t singleLineCommentLimit = 80;  // Characters
+        uint8_t singleLineArrayLimit = 5;     // Entry
+        uint8_t singleLineMapLimit = 5;       // Entry
+
+        // Array and Map
         bool bCommasOnArrays = true;
         bool bCommasOnMaps = true;
         bool bCommasOnLastElement = true;
-        bool bSingleLineForShortArrays = true;
-        bool bSingleLineForShortMaps = true;
-        bool bSpaceAfterComma = true;
-        bool bSpaceWithinParanthesis = true;
-        bool bSpaceBeforeAndAfterEqualSign = false;
+        bool bUseEqualSignForSingleLineArraysAndMaps = false;
+
+        // General
         bool bGroupSimilarTypes = true;
         bool bUppercaseHex = true;
-        bool bEmptyLineAtTheEndOfTheFile = true;
-        bool bAlignCloseComments = true;
-        bool bUseEqualSignForSingleLineArraysAndMaps = false;
         bool bUseNilInsteadOfNull = false;
         bool bAlwaysUseDoubleQuoteForStrings = false;
     };
@@ -541,20 +560,33 @@ FDF_EXPORT namespace fdf
         }
 
 
-        template<bool bUseNilInsteadOfNull = false>
+        template<Style STYLE = {}>
         constexpr std::string_view DataToView(std::string& temp) const
         {
             switch(type)
             {
                 case Type::Invalid: return detail::INVALID_TEXT;
-                case Type::Null:    if constexpr(bUseNilInsteadOfNull) return detail::KEYWORDS[1]; return detail::KEYWORDS[0];
+                case Type::Null:    if constexpr(STYLE.bUseNilInsteadOfNull) return detail::KEYWORDS[1]; return detail::KEYWORDS[0];
                 case Type::Array:   return detail::ARRAY_TEXT;
                 case Type::Map:     return detail::MAP_TEXT;
 
                 case Type::String:
-                case Type::Hex:
                 case Type::Timestamp:
                     return size > detail::VARIANT_SIZE - 1? data.strDynamic.view.substr(0, size) : std::string_view(data.str, size);
+                
+                case Type::Hex:
+                {
+                    std::string_view view = size > detail::VARIANT_SIZE - 1? data.strDynamic.view.substr(0, size) : std::string_view(data.str, size);
+
+                    if constexpr(STYLE.bUppercaseHex)
+                    {
+                        temp = view;
+                        std::ranges::transform(temp, temp.begin(), [](unsigned char c)  { return std::toupper(c); });
+                        return temp;
+                    }
+
+                    return view;
+                }
 
                 case Type::Version:
                     if(data.u[3] == 0)
@@ -719,12 +751,6 @@ inline fdf::Entry fdf::Entry::INVALID;
 
 namespace fdf::detail
 {
-    #define CHECK_TOKEN(TOKEN)         if(TOKEN.type == TokenType::Invalid  ) return false
-    #define CHECK_TOKEN_FOR_EOF(TOKEN) if(TOKEN.type == TokenType::EndOfFile) return false
-
-
-
-
     constexpr Token Tokenizer::GetNextToken() noexcept
     {
         if(index >= content.size())
@@ -1221,7 +1247,7 @@ namespace fdf::detail
                 Token comment = TokenType::NonExisting;
             #endif
                 Token currentToken = tokenizer.Current();
-                CHECK_TOKEN(currentToken);
+                FDF_CHECK_TOKEN(currentToken);
     
                 while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
                 {
@@ -1323,8 +1349,8 @@ namespace fdf::detail
                 currentToken = tokenizer.Advance();
             }
     
-            CHECK_TOKEN(currentToken);
-            CHECK_TOKEN_FOR_EOF(currentToken);
+            FDF_CHECK_TOKEN(currentToken);
+            FDF_CHECK_TOKEN_FOR_EOF(currentToken);
     
             if(bHasParent)
             {
@@ -1349,8 +1375,8 @@ namespace fdf::detail
             {
                 bHasEqual = true;
                 currentToken = tokenizer.Advance();
-                CHECK_TOKEN(currentToken);
-                CHECK_TOKEN_FOR_EOF(currentToken);
+                FDF_CHECK_TOKEN(currentToken);
+                FDF_CHECK_TOKEN_FOR_EOF(currentToken);
             }
 
             while(currentToken.type == TokenType::Comment || currentToken.type == TokenType::NewLine)
@@ -1366,8 +1392,8 @@ namespace fdf::detail
             #endif
 
                 currentToken = tokenizer.Advance();
-                CHECK_TOKEN(currentToken);
-                CHECK_TOKEN_FOR_EOF(currentToken);
+                FDF_CHECK_TOKEN(currentToken);
+                FDF_CHECK_TOKEN_FOR_EOF(currentToken);
             }
 
         #if !FDF_NO_COMMENTS
@@ -1862,8 +1888,8 @@ namespace fdf::detail
             entries[entryID].data.u[0] = 0;  // Total tree size (total child count, not just top level)
     
             Token currentToken = tokenizer.Advance();
-            CHECK_TOKEN(currentToken);
-            CHECK_TOKEN_FOR_EOF(currentToken);
+            FDF_CHECK_TOKEN(currentToken);
+            FDF_CHECK_TOKEN_FOR_EOF(currentToken);
     
             size_t currentChildID = entryID + 1;
             while(true)
@@ -1884,8 +1910,8 @@ namespace fdf::detail
                 #endif
     
                     currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
+                    FDF_CHECK_TOKEN(currentToken);
+                    FDF_CHECK_TOKEN_FOR_EOF(currentToken);
                 }
     
     
@@ -1909,14 +1935,14 @@ namespace fdf::detail
                     if(currentToken.type == TokenType::Comma)
                     {
                         currentToken = tokenizer.Advance();
-                        CHECK_TOKEN(currentToken);
-                        CHECK_TOKEN_FOR_EOF(currentToken);
+                        FDF_CHECK_TOKEN(currentToken);
+                        FDF_CHECK_TOKEN_FOR_EOF(currentToken);
                     }
                 }
                 else if(currentToken.type == TokenType::SquareBraceClose)
                 {
                     currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
+                    FDF_CHECK_TOKEN(currentToken);
 
                     if(currentToken.type == TokenType::Comment)
                     {
@@ -1927,13 +1953,13 @@ namespace fdf::detail
                         comment = currentToken;
                     #endif
                         currentToken = tokenizer.Advance();
-                        CHECK_TOKEN(currentToken);
+                        FDF_CHECK_TOKEN(currentToken);
                     }
     
                     if(currentToken.type == TokenType::NewLine)
                     {
                         currentToken = tokenizer.Advance();
-                        CHECK_TOKEN(currentToken);
+                        FDF_CHECK_TOKEN(currentToken);
                     }
 
                 #if !FDF_NO_COMMENTS
@@ -1964,8 +1990,8 @@ namespace fdf::detail
             //    CopyEntryDeep(entries, userTypes, userTypeID);
     
             Token currentToken = tokenizer.Advance();
-            CHECK_TOKEN(currentToken);
-            CHECK_TOKEN_FOR_EOF(currentToken);
+            FDF_CHECK_TOKEN(currentToken);
+            FDF_CHECK_TOKEN_FOR_EOF(currentToken);
 
             size_t currentChildID = entryID + 1;
             while(true)
@@ -1986,8 +2012,8 @@ namespace fdf::detail
                 #endif
     
                     currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
-                    CHECK_TOKEN_FOR_EOF(currentToken);
+                    FDF_CHECK_TOKEN(currentToken);
+                    FDF_CHECK_TOKEN_FOR_EOF(currentToken);
                 }
     
     
@@ -2011,14 +2037,14 @@ namespace fdf::detail
                     if(currentToken.type == TokenType::Comma)
                     {
                         currentToken = tokenizer.Advance();
-                        CHECK_TOKEN(currentToken);
-                        CHECK_TOKEN_FOR_EOF(currentToken);
+                        FDF_CHECK_TOKEN(currentToken);
+                        FDF_CHECK_TOKEN_FOR_EOF(currentToken);
                     }
                 }
                 else if(currentToken.type == TokenType::CurlyBraceClose)
                 {
                     currentToken = tokenizer.Advance();
-                    CHECK_TOKEN(currentToken);
+                    FDF_CHECK_TOKEN(currentToken);
 
                     if(currentToken.type == TokenType::Comment)
                     {
@@ -2029,13 +2055,13 @@ namespace fdf::detail
                         comment = currentToken;
                     #endif
                         currentToken = tokenizer.Advance();
-                        CHECK_TOKEN(currentToken);
+                        FDF_CHECK_TOKEN(currentToken);
                     }
     
                     if(currentToken.type == TokenType::NewLine)
                     {
                         currentToken = tokenizer.Advance();
-                        CHECK_TOKEN(currentToken);
+                        FDF_CHECK_TOKEN(currentToken);
                     }
 
                 #if !FDF_NO_COMMENTS
@@ -2122,56 +2148,68 @@ namespace fdf::detail
 
 
         template<Style STYLE>
-        constexpr static bool WriteFileContent(std::string& buffer, const std::vector<Entry>& entries
+        constexpr static void WriteFileContent(std::string& buffer, const std::vector<Entry>& entries
         #if !FDF_NO_COMMENTS
             , const std::string& fileComment
         #endif
             )
         {
-            auto isShortContainer = [](const Entry& e)  { return e.data.u[0] < 10; };
-            auto addTab = [&](size_t count)
+            auto isShortArray   = [ ](const Entry& e) -> bool  { return e.data.u[0] <= STYLE.singleLineArrayLimit; };
+            auto isShortMap     = [ ](const Entry& e) -> bool  { return e.data.u[0] <= STYLE.singleLineMapLimit; };
+            auto writeEntryName = [&](const Entry& e) -> void  { buffer.append(e.GetIdentifier()); };
+            auto addTab = [&buffer](size_t count) -> void
             {
                 if constexpr(STYLE.bUseSpacesOverTabs)
                     buffer.append(count * STYLE.tabSize, ' ');
                 else
                     buffer.append(count, '\t');
             };
-            auto addEqualSign = [&]()
+            auto addEqualSign = [&buffer]() -> void
             {
                 if constexpr(STYLE.bSpaceBeforeAndAfterEqualSign)
                     buffer.append(" = ");
                 else
                     buffer.push_back('=');
             };
+            auto addComma = [&buffer]() -> void
+            {
+                if constexpr(STYLE.bSpaceAfterComma)
+                    buffer.append(", ");
+                else
+                    buffer.push_back(',');
+            };
 
-            auto writeLambda = [&](std::ranges::range auto&& order) -> bool
+            auto writeLambda = [&](std::ranges::range auto&& order) -> void
             {
                 buffer.clear();
                 buffer.reserve(entries.size() * 50);
 
             #if !FDF_NO_COMMENTS
-                if(!fileComment.empty())
+                if constexpr(STYLE.bFileComment)
                 {
-                    buffer.append("/*#\n");
-                    size_t prevNewLinePos = -1;
-                    size_t newLinePos = fileComment.find_first_of('\n');
-                    while(newLinePos != std::string::npos)
+                    if(!fileComment.empty())
                     {
+                        buffer.append("/*#\n");
+                        size_t prevNewLinePos = -1;
+                        size_t newLinePos = fileComment.find_first_of('\n');
+                        while(newLinePos != std::string::npos)
+                        {
+                            addTab(1);
+                            buffer.append(fileComment, prevNewLinePos + 1, newLinePos - prevNewLinePos);
+                            prevNewLinePos = newLinePos;
+                            newLinePos = fileComment.find_first_of('\n', newLinePos + 1);
+                        }
                         addTab(1);
-                        buffer.append(fileComment, prevNewLinePos + 1, newLinePos - prevNewLinePos);
-                        prevNewLinePos = newLinePos;
-                        newLinePos = fileComment.find_first_of('\n', newLinePos + 1);
+                        buffer.append(fileComment, prevNewLinePos + 1);
+                        buffer.append("\n*/\n\n\n");
                     }
-                    addTab(1);
-                    buffer.append(fileComment, prevNewLinePos + 1);
-                    buffer.append("\n*/\n\n\n");
                 }
             #endif
 
-                auto writeEntryValue = [&](const Entry& e) -> void
+                auto writeSimpleEntryValue = [&](const Entry& e) -> void
                 {
                     std::string temp;
-                    std::string_view view = e.DataToView<STYLE.bUseNilInsteadOfNull>(temp);
+                    std::string_view view = e.DataToView<STYLE>(temp);
                     if(e.type != Type::String)
                     {
                         buffer.append(view);
@@ -2225,8 +2263,261 @@ namespace fdf::detail
                     }
                 };
 
-                // TODO: implement
-                return false;
+                auto writeSimpleEntry = [&](const Entry& e) -> void
+                {
+                    writeEntryName(e);
+                    addEqualSign();
+                    writeSimpleEntryValue(e);
+                };
+
+
+
+
+                auto it = order.begin();
+                auto writeSingleLine = [&]<bool bIsArray>(auto&& self, uint8_t depth) -> void
+                {
+                    if constexpr(bIsArray)
+                    {
+                        if constexpr(STYLE.bSpaceWithinParentheses)
+                            buffer.append("[ ");
+                        else
+                            buffer.push_back('[');
+                    }
+                    else
+                    {
+                        if constexpr(STYLE.bSpaceWithinParentheses)
+                            buffer.append("{ ");
+                        else
+                            buffer.push_back('{');
+                    }
+
+                    ++it;
+                    while(it != order.end())
+                    {
+                        const size_t index = *it;
+                        if(entries[index].depth < depth)
+                            break;
+
+                        if(!entries[index].IsContainer())
+                        {
+                            if constexpr(bIsArray)
+                                writeSimpleEntryValue(entries[index]);
+                            else
+                                writeSimpleEntry(entries[index]);
+
+                            addComma();
+                            ++it;
+                        }
+                        else
+                        {
+                            if constexpr(!bIsArray)
+                            {
+                                writeEntryName(entries[index]);
+                                if constexpr(STYLE.bUseEqualSignForSingleLineArraysAndMaps)
+                                    addEqualSign();
+                            }
+
+                            if(entries[index].type == Type::Array)
+                            {
+                                self.operator()<true>(self, depth + 1);
+                                addComma();
+                            }
+                            else if(entries[index].type == Type::Map)
+                            {
+                                self.operator()<false>(self, depth + 1);
+                                addComma();
+                            }
+                            else
+                                std::unreachable();
+                        }
+                    }
+
+                    if constexpr(STYLE.bSpaceAfterComma)
+                        buffer.erase(buffer.size() - 2);
+                    else
+                        buffer.pop_back();
+
+                    if constexpr(bIsArray)
+                    {
+                        if constexpr(STYLE.bSpaceWithinParentheses)
+                            buffer.append(" ]");
+                        else
+                            buffer.append("]");
+                    }
+                    else
+                    {
+                        if constexpr(STYLE.bSpaceWithinParentheses)
+                            buffer.append(" }");
+                        else
+                            buffer.append("}");
+                    }
+                };
+
+
+
+
+                auto writeMultiLine = [&]<bool bIsArray>(auto&& self, uint8_t depth) -> void
+                {
+                    if constexpr(bIsArray)
+                    {
+                        if constexpr(STYLE.bParenthesesOnNewLine)
+                        {
+                            buffer.push_back('\n');
+                            addTab(depth - 1);
+                            buffer.append("[\n");
+                        }
+                        else
+                            buffer.append("[\n");
+                    }
+                    else
+                    {
+                        if constexpr(STYLE.bParenthesesOnNewLine)
+                        {
+                            buffer.push_back('\n');
+                            addTab(depth - 1);
+                            buffer.append("{\n");
+                        }
+                        else
+                            buffer.append("{\n");
+                    }
+
+                    ++it;
+                    while(it != order.end())
+                    {
+                        const size_t index = *it;
+                        if(entries[index].depth < depth)
+                            break;
+
+                        addTab(depth);
+
+                        if(!entries[index].IsContainer())
+                        {
+                            if constexpr(bIsArray)
+                                writeSimpleEntryValue(entries[index]);
+                            else
+                                writeSimpleEntry(entries[index]);
+
+                            ++it;
+                        }
+                        else if(entries[index].type == Type::Array)
+                        {
+                            if(isShortArray(entries[index]))
+                            {
+                                if constexpr(!bIsArray)
+                                {
+                                    writeEntryName(entries[index]);
+                                    if constexpr(STYLE.bUseEqualSignForSingleLineArraysAndMaps)
+                                        addEqualSign();
+                                }
+                                writeSingleLine.operator()<true>(writeSingleLine, depth + 1);
+                            }
+                            else
+                            {
+                                buffer.push_back('\n');
+                                if constexpr(!bIsArray)
+                                    writeEntryName(entries[index]);
+                                self.operator()<true>(self, depth + 1);
+                            }
+                        }
+                        else if(entries[index].type == Type::Map)
+                        {
+                            if(isShortMap(entries[index]))
+                            {
+                                if constexpr(!bIsArray)
+                                {
+                                    writeEntryName(entries[index]);
+                                    if constexpr(STYLE.bUseEqualSignForSingleLineArraysAndMaps)
+                                        addEqualSign();
+                                }
+                                writeSingleLine.operator()<false>(writeSingleLine, depth + 1);
+                            }
+                            else
+                            {
+                                buffer.push_back('\n');
+                                if constexpr(!bIsArray)
+                                    writeEntryName(entries[index]);
+                                self.operator()<false>(self, depth + 1);
+                            }
+                        }
+                        else
+                            std::unreachable();
+
+                        if constexpr((bIsArray && STYLE.bCommasOnArrays) || (!bIsArray && STYLE.bCommasOnMaps))
+                            buffer.append(",\n");
+                        else
+                            buffer.push_back('\n');
+                    }
+
+                    if constexpr(!STYLE.bCommasOnLastElement)
+                        buffer.erase(buffer.size() - 2, 1);
+
+                    addTab(depth - 1);
+                    if constexpr(bIsArray)
+                        buffer.append("]\n");
+                    else
+                        buffer.append("}\n");
+                };
+
+
+
+
+                while(it != order.end())
+                {
+                    const size_t index = *it;
+
+                    if(!entries[index].IsContainer())
+                    {
+                        writeSimpleEntry(entries[index]);
+                        ++it;
+                    }
+                    else if(entries[index].type == Type::Array)
+                    {
+                        if(isShortArray(entries[index]))
+                        {
+                            writeEntryName(entries[index]);
+                            if constexpr(STYLE.bUseEqualSignForSingleLineArraysAndMaps)
+                                addEqualSign();
+
+                            writeSingleLine.operator()<true>(writeSingleLine, 1);
+                        }
+                        else
+                        {
+                            buffer.push_back('\n');
+                            writeEntryName(entries[index]);
+                            writeMultiLine.operator()<true>(writeMultiLine, 1);
+                        }
+                    }
+                    else if(entries[index].type == Type::Map)
+                    {
+                        if(isShortMap(entries[index]))
+                        {
+                            writeEntryName(entries[index]);
+                            if constexpr(STYLE.bUseEqualSignForSingleLineArraysAndMaps)
+                                addEqualSign();
+                            
+                            writeSingleLine.operator()<false>(writeSingleLine, 1);
+                        }
+                        else
+                        {
+                            buffer.push_back('\n');
+                            writeEntryName(entries[index]);
+                            writeMultiLine.operator()<false>(writeMultiLine, 1);
+                        }
+                    }
+                    else
+                        std::unreachable();
+
+                    buffer.push_back('\n');
+                }
+
+                const size_t lastNonNewLine = buffer.find_last_not_of('\n');
+                if(lastNonNewLine != std::string::npos)
+                {
+                    if constexpr(STYLE.bEmptyLineAtEOF)
+                        buffer.erase(lastNonNewLine + 2);
+                    else
+                        buffer.erase(lastNonNewLine + 1);
+                }
             };
 
 
@@ -2270,11 +2561,11 @@ namespace fdf::detail
                     }
                 };
                 sortFn(sortFn, 0, 0);
-                return writeLambda(sortVec);
+                writeLambda(sortVec);
             }
             else
             {
-                return writeLambda(std::views::iota(static_cast<size_t>(0), entries.size()));
+                writeLambda(std::views::iota(static_cast<size_t>(0), entries.size()));
             }
         }
     };
@@ -2368,12 +2659,12 @@ FDF_EXPORT namespace fdf
 
     public:
         template<Style STYLE = {}>
-        constexpr bool WriteToBuffer(std::string& buffer) const noexcept
+        constexpr void WriteToBuffer(std::string& buffer) const noexcept
         {
         #if !FDF_NO_COMMENTS
-            return detail::Utils<ERROR_CALLBACK>::WriteFileContent<STYLE>(buffer, entries, fileComment);
+            detail::Utils<ERROR_CALLBACK>::WriteFileContent<STYLE>(buffer, entries, fileComment);
         #else
-            return detail::Utils<ERROR_CALLBACK>::WriteFileContent<STYLE>(buffer, entries);
+            detail::Utils<ERROR_CALLBACK>::WriteFileContent<STYLE>(buffer, entries);
         #endif
         }
         template<Style STYLE = {}>
@@ -2398,15 +2689,15 @@ FDF_EXPORT namespace fdf
                 return false;
             }
 
-            std::string buffer;
-            if(!WriteToBuffer(buffer))
-                return false;
-
             std::ofstream file(filepath);
             if(!file)
                 return false;
 
+            std::string buffer;
+            WriteToBuffer(buffer);
+
             file << buffer;
+            return static_cast<bool>(file);
         }
 
     private:
@@ -2558,5 +2849,6 @@ FDF_EXPORT namespace fdf
 
 
 #undef FDF_EXPORT
-#undef CHECK_TOKEN
-#undef CHECK_TOKEN_FOR_EOF
+#undef FDF_CHECK_TOKEN
+#undef FDF_CHECK_TOKEN_FOR_EOF
+#undef FDF_FORWARD_ERROR
