@@ -174,7 +174,7 @@ namespace fdf::detail
         template<Style STYLE = {}>
         static bool PrintFile(const auto& io, std::string_view outFile)
         {
-            return io.WriteToFile<STYLE>(outFile);
+            return io.template WriteToFile<STYLE>(outFile);
         }
 
 

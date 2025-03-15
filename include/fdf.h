@@ -2274,7 +2274,7 @@ namespace fdf::detail
 
 
                 auto it = order.begin();
-                auto writeSingleLine = [&]<bool bIsArray>(auto&& self, uint8_t depth) -> void
+                auto writeSingleLine = [&]<bool bIsArray>(this auto self, uint8_t depth) -> void
                 {
                     if constexpr(bIsArray)
                     {
@@ -2319,12 +2319,12 @@ namespace fdf::detail
 
                             if(entries[index].type == Type::Array)
                             {
-                                self.operator()<true>(self, depth + 1);
+                                self.template operator()<true>(depth + 1);
                                 addComma();
                             }
                             else if(entries[index].type == Type::Map)
                             {
-                                self.operator()<false>(self, depth + 1);
+                                self.template operator()<false>(depth + 1);
                                 addComma();
                             }
                             else
@@ -2356,7 +2356,7 @@ namespace fdf::detail
 
 
 
-                auto writeMultiLine = [&]<bool bIsArray>(auto&& self, uint8_t depth) -> void
+                auto writeMultiLine = [&]<bool bIsArray>(this auto self, uint8_t depth) -> void
                 {
                     if constexpr(bIsArray)
                     {
@@ -2409,14 +2409,14 @@ namespace fdf::detail
                                     if constexpr(STYLE.bUseEqualSignForSingleLineArraysAndMaps)
                                         addEqualSign();
                                 }
-                                writeSingleLine.operator()<true>(writeSingleLine, depth + 1);
+                                writeSingleLine.template operator()<true>(depth + 1);
                             }
                             else
                             {
                                 buffer.push_back('\n');
                                 if constexpr(!bIsArray)
                                     writeEntryName(entries[index]);
-                                self.operator()<true>(self, depth + 1);
+                                self.template operator()<true>(depth + 1);
                             }
                         }
                         else if(entries[index].type == Type::Map)
@@ -2429,14 +2429,14 @@ namespace fdf::detail
                                     if constexpr(STYLE.bUseEqualSignForSingleLineArraysAndMaps)
                                         addEqualSign();
                                 }
-                                writeSingleLine.operator()<false>(writeSingleLine, depth + 1);
+                                writeSingleLine.template operator()<false>(depth + 1);
                             }
                             else
                             {
                                 buffer.push_back('\n');
                                 if constexpr(!bIsArray)
                                     writeEntryName(entries[index]);
-                                self.operator()<false>(self, depth + 1);
+                                self.template operator()<false>(depth + 1);
                             }
                         }
                         else
@@ -2478,13 +2478,13 @@ namespace fdf::detail
                             if constexpr(STYLE.bUseEqualSignForSingleLineArraysAndMaps)
                                 addEqualSign();
 
-                            writeSingleLine.operator()<true>(writeSingleLine, 1);
+                            writeSingleLine.template operator()<true>(1);
                         }
                         else
                         {
                             buffer.push_back('\n');
                             writeEntryName(entries[index]);
-                            writeMultiLine.operator()<true>(writeMultiLine, 1);
+                            writeMultiLine.template operator()<true>(1);
                         }
                     }
                     else if(entries[index].type == Type::Map)
@@ -2495,13 +2495,13 @@ namespace fdf::detail
                             if constexpr(STYLE.bUseEqualSignForSingleLineArraysAndMaps)
                                 addEqualSign();
                             
-                            writeSingleLine.operator()<false>(writeSingleLine, 1);
+                            writeSingleLine.template operator()<false>(1);
                         }
                         else
                         {
                             buffer.push_back('\n');
                             writeEntryName(entries[index]);
-                            writeMultiLine.operator()<false>(writeMultiLine, 1);
+                            writeMultiLine.template operator()<false>(1);
                         }
                     }
                     else
@@ -2662,9 +2662,9 @@ FDF_EXPORT namespace fdf
         constexpr void WriteToBuffer(std::string& buffer) const noexcept
         {
         #if !FDF_NO_COMMENTS
-            detail::Utils<ERROR_CALLBACK>::WriteFileContent<STYLE>(buffer, entries, fileComment);
+            detail::Utils<ERROR_CALLBACK>::template WriteFileContent<STYLE>(buffer, entries, fileComment);
         #else
-            detail::Utils<ERROR_CALLBACK>::WriteFileContent<STYLE>(buffer, entries);
+            detail::Utils<ERROR_CALLBACK>::template WriteFileContent<STYLE>(buffer, entries);
         #endif
         }
         template<Style STYLE = {}>
