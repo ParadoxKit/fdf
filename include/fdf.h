@@ -516,35 +516,35 @@ FDF_EXPORT namespace fdf
         }
 
     public:
-        constexpr size_t GetChildCount()         const noexcept  { return IsContainer()? data.u[0] : 0; }
-        constexpr size_t GetTopLevelChildCount() const noexcept  { return IsContainer()? size : 0; }
+        [[nodiscard]] constexpr size_t GetChildCount()         const noexcept  { return IsContainer()? data.u[0] : 0; }
+        [[nodiscard]] constexpr size_t GetTopLevelChildCount() const noexcept  { return IsContainer()? size : 0; }
 
-        constexpr uint8_t  GetDepth()      const noexcept  { return depth; }
-        constexpr Type     GetType()       const noexcept  { return type; }
-        constexpr bool     IsValid()       const noexcept  { return type != Type::Invalid; }
-        constexpr bool     IsNull()        const noexcept  { return type == Type::Null; }
-        constexpr bool     IsNil()         const noexcept  { return IsNull(); }
-        constexpr bool     IsContainer()   const noexcept  { return type == Type::Array || type == Type::Map; }
-        constexpr bool     HasValue()      const noexcept  { return IsValid() && !IsNull() && !IsContainer(); }
+        [[nodiscard]] constexpr uint8_t  GetDepth()      const noexcept  { return depth; }
+        [[nodiscard]] constexpr Type     GetType()       const noexcept  { return type; }
+        [[nodiscard]] constexpr bool     IsValid()       const noexcept  { return type != Type::Invalid; }
+        [[nodiscard]] constexpr bool     IsNull()        const noexcept  { return type == Type::Null; }
+        [[nodiscard]] constexpr bool     IsNil()         const noexcept  { return IsNull(); }
+        [[nodiscard]] constexpr bool     IsContainer()   const noexcept  { return type == Type::Array || type == Type::Map; }
+        [[nodiscard]] constexpr bool     HasValue()      const noexcept  { return IsValid() && !IsNull() && !IsContainer(); }
 
 
-        constexpr std::string_view GetFullIdentifier() const noexcept
+        [[nodiscard]] constexpr std::string_view GetFullIdentifier() const noexcept
         {
             return fullIdentifier;
         }
-        constexpr std::string_view GetIdentifier() const noexcept
+        [[nodiscard]] constexpr std::string_view GetIdentifier() const noexcept
         {
             return std::string_view(fullIdentifier.data() + fullIdentifier.size() - identifierSize, identifierSize);
         }
-        constexpr std::string_view GetIdentifierWithDot() const noexcept
+        [[nodiscard]] constexpr std::string_view GetIdentifierWithDot() const noexcept
         {
             return std::string_view(fullIdentifier.data() + fullIdentifier.size() - identifierSize - 1, identifierSize + 1);
         }
-        constexpr std::string_view GetParentIdentifier() const noexcept
+        [[nodiscard]] constexpr std::string_view GetParentIdentifier() const noexcept
         {
             return std::string_view(fullIdentifier.data(), fullIdentifier.size() - identifierSize - 1);
         }
-        constexpr std::string_view GetParentIdentifierWithDot() const noexcept
+        [[nodiscard]] constexpr std::string_view GetParentIdentifierWithDot() const noexcept
         {
             return std::string_view(fullIdentifier.data(), fullIdentifier.size() - identifierSize);
         }
@@ -561,7 +561,7 @@ FDF_EXPORT namespace fdf
 
 
         template<Style STYLE = {}>
-        constexpr std::string_view DataToView(std::string& temp) const
+        [[nodiscard]] constexpr std::string_view DataToView(std::string& temp) const
         {
             switch(type)
             {
@@ -629,9 +629,9 @@ FDF_EXPORT namespace fdf
 
 
         template<typename T>
-        constexpr auto GetValue() const  { }
+        [[nodiscard]] constexpr auto GetValue() const  { }
         template<typename T>
-        constexpr auto GetValueUnsafe() const  { }
+        [[nodiscard]] constexpr auto GetValueUnsafe() const  { }
     };
 
 
@@ -639,7 +639,7 @@ FDF_EXPORT namespace fdf
 
 
     template<>
-    constexpr auto Entry::GetValue<bool>() const
+    [[nodiscard]] constexpr auto Entry::GetValue<bool>() const
     {
         if(type != Type::Bool)
             throw std::runtime_error("Non matching type is not 'bool'");
@@ -647,37 +647,37 @@ FDF_EXPORT namespace fdf
     }
 
     template<>
-    constexpr auto Entry::GetValue<int64_t>() const
+    [[nodiscard]] constexpr auto Entry::GetValue<int64_t>() const
     {
         if(type != Type::Int)
             throw std::runtime_error("Non matching type is not 'int64_t'");
         return std::span<const int64_t>(data.i, size);
     }
     template<>
-    constexpr auto Entry::GetValue<int>() const { return GetValue<int64_t>(); }
+    [[nodiscard]] constexpr auto Entry::GetValue<int>() const { return GetValue<int64_t>(); }
 
     template<>
-    constexpr auto Entry::GetValue<uint64_t>() const
+    [[nodiscard]] constexpr auto Entry::GetValue<uint64_t>() const
     {
         if(type != Type::UInt && type != Type::Version)
             throw std::runtime_error("Non matching type is not 'uint64_t'");
         return std::span<const uint64_t>(data.u, size);
     }
     template<>
-    constexpr auto Entry::GetValue<unsigned int>() const { return GetValue<uint64_t>(); }
+    [[nodiscard]] constexpr auto Entry::GetValue<unsigned int>() const { return GetValue<uint64_t>(); }
 
     template<>
-    constexpr auto Entry::GetValue<double>() const
+    [[nodiscard]] constexpr auto Entry::GetValue<double>() const
     {
         if(type != Type::Float)
             throw std::runtime_error("Non matching type is not 'double'");
         return std::span<const double>(data.f, size);
     }
     template<>
-    constexpr auto Entry::GetValue<float>() const { return GetValue<double>(); }
+    [[nodiscard]] constexpr auto Entry::GetValue<float>() const { return GetValue<double>(); }
 
     template<>
-    constexpr auto Entry::GetValue<char>() const
+    [[nodiscard]] constexpr auto Entry::GetValue<char>() const
     {
         if(type != Type::String && type != Type::Hex && type != Type::Timestamp)
             throw std::runtime_error("Non matching type is not 'string'");
@@ -687,55 +687,55 @@ FDF_EXPORT namespace fdf
         return std::string_view(data.str, size);
     }
     template<>
-    constexpr auto Entry::GetValue<std::string>() const { return GetValue<char>(); }
+    [[nodiscard]] constexpr auto Entry::GetValue<std::string>() const { return GetValue<char>(); }
     template<>
-    constexpr auto Entry::GetValue<std::string_view>() const { return GetValue<char>(); }
+    [[nodiscard]] constexpr auto Entry::GetValue<std::string_view>() const { return GetValue<char>(); }
 
 
 
 
 
     template<>
-    constexpr auto Entry::GetValueUnsafe<bool>() const
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<bool>() const
     {
         return std::span<const bool>(data.b, size);
     }
 
     template<>
-    constexpr auto Entry::GetValueUnsafe<int64_t>() const
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<int64_t>() const
     {
         return std::span<const int64_t>(data.i, size);
     }
     template<>
-    constexpr auto Entry::GetValueUnsafe<int>() const { return GetValueUnsafe<int64_t>(); }
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<int>() const { return GetValueUnsafe<int64_t>(); }
 
     template<>
-    constexpr auto Entry::GetValueUnsafe<uint64_t>() const
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<uint64_t>() const
     {
         return std::span<const uint64_t>(data.u, size);
     }
     template<>
-    constexpr auto Entry::GetValueUnsafe<unsigned int>() const { return GetValueUnsafe<uint64_t>(); }
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<unsigned int>() const { return GetValueUnsafe<uint64_t>(); }
 
     template<>
-    constexpr auto Entry::GetValueUnsafe<double>() const
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<double>() const
     {
         return std::span<const double>(data.f, size);
     }
     template<>
-    constexpr auto Entry::GetValueUnsafe<float>() const { return GetValueUnsafe<double>(); }
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<float>() const { return GetValueUnsafe<double>(); }
 
     template<>
-    constexpr auto Entry::GetValueUnsafe<char>() const
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<char>() const
     {
         if(size > detail::VARIANT_SIZE - 1)
             return std::string_view(data.strDynamic.data, size);
         return std::string_view(data.str, size);
     }
     template<>
-    constexpr auto Entry::GetValueUnsafe<std::string>() const { return GetValueUnsafe<char>(); }
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<std::string>() const { return GetValueUnsafe<char>(); }
     template<>
-    constexpr auto Entry::GetValueUnsafe<std::string_view>() const { return GetValueUnsafe<char>(); }
+    [[nodiscard]] constexpr auto Entry::GetValueUnsafe<std::string_view>() const { return GetValueUnsafe<char>(); }
 }
 
 inline fdf::Entry fdf::Entry::INVALID;
@@ -1231,7 +1231,7 @@ namespace fdf::detail
     template<auto ERROR_CALLBACK>
     struct Utils
     {
-        constexpr static bool ParseFileContent(std::string_view content, std::vector<Entry>& entries,
+        [[nodiscard]] constexpr static bool ParseFileContent(std::string_view content, std::vector<Entry>& entries,
         #if !FDF_NO_COMMENTS
             std::string& fileComment,
         #endif
@@ -1323,7 +1323,7 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries,
+        [[nodiscard]] constexpr static bool ParseVariable(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries,
         #if !FDF_NO_COMMENTS
             Token comment,
         #endif
@@ -1418,7 +1418,7 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseSimpleValue(std::string_view content, Tokenizer& tokenizer, Entry& entry
+        [[nodiscard]] constexpr static bool ParseSimpleValue(std::string_view content, Tokenizer& tokenizer, Entry& entry
         #if !FDF_NO_COMMENTS
             , Token comment
         #endif
@@ -1877,7 +1877,7 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries
+        [[nodiscard]] constexpr static bool ParseArray(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries
         #if !FDF_NO_COMMENTS
             , Token comment
         #endif
@@ -1976,7 +1976,7 @@ namespace fdf::detail
     
     
     
-        constexpr static bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries
+        [[nodiscard]] constexpr static bool ParseMap(std::string_view content, Tokenizer& tokenizer, std::vector<Entry>& entries
         #if !FDF_NO_COMMENTS
             , Token comment
         #endif
@@ -2078,11 +2078,46 @@ namespace fdf::detail
     
     
     
-        constexpr static size_t FindEntry(const std::vector<Entry>& entries, std::string_view fullIdentifier, size_t depth, size_t startIndex)
+        [[nodiscard]] constexpr static size_t FindEntry(const std::vector<Entry>& entries, std::string_view fullIdentifier, uint8_t depth, size_t startIndex)
         {
             for(size_t i = startIndex; i < entries.size(); i++)
             {
                 if(entries[i].depth == depth && entries[i].fullIdentifier == fullIdentifier)
+                    return i;
+            }
+    
+            return -1;
+        }
+
+        [[nodiscard]] constexpr static size_t FindChildEntry(const std::vector<Entry>& entries, std::string_view parentIdentifier, std::string_view identifier, uint8_t depth, size_t startIndex)
+        {
+            if(parentIdentifier.empty())
+                return -1;
+
+            std::array<std::string_view, 3> parts = {parentIdentifier, ".", identifier};
+            const size_t totalSize = parentIdentifier.size() + identifier.size() + 1;
+            auto compareEntry = [&](const Entry& e) -> bool
+            {
+                if(e.depth != depth || e.fullIdentifier.size() != totalSize)
+                    return false;
+
+                size_t index = 0;
+                for(auto sv : parts)
+                {
+                    for(char c : sv)
+                    {
+                        if(index >= e.fullIdentifier.size() || e.fullIdentifier[index++] != c)
+                            return false;
+                    }
+                }
+                return true;
+            };
+
+            for(size_t i = startIndex; i < entries.size(); i++)
+            {
+                if(entries[i].depth < depth)
+                    return -1;
+                if(compareEntry(entries[i]))
                     return i;
             }
     
@@ -2107,7 +2142,7 @@ namespace fdf::detail
             }
         }
     
-        constexpr static bool OverrideEntry(std::vector<Entry>& entries, size_t targetID, size_t sourceID)
+        [[nodiscard]] constexpr static bool OverrideEntry(std::vector<Entry>& entries, size_t targetID, size_t sourceID)
         {
             // TODO: implement or completely get rid of overriding...
             // For now, we don't allow any kind of name collision (we don't override anything)
@@ -2594,7 +2629,7 @@ FDF_EXPORT namespace fdf
         constexpr IO() noexcept = default;
 
     public:
-        constexpr bool Parse(std::string_view content, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseNewIfExistingIsEmpty) noexcept
+        [[nodiscard]] constexpr bool Parse(std::string_view content, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseNewIfExistingIsEmpty) noexcept
         {
             IO other;
         #if !FDF_NO_COMMENTS
@@ -2607,7 +2642,7 @@ FDF_EXPORT namespace fdf
 
             return Combine(other, fileCommentCombineStrategy);
         }
-        inline bool Parse(std::filesystem::path filepath, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseNewIfExistingIsEmpty) noexcept
+        [[nodiscard]] inline bool Parse(std::filesystem::path filepath, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseNewIfExistingIsEmpty) noexcept
         {
             if(!std::filesystem::exists(filepath) || !std::filesystem::is_regular_file(filepath))
                 return false;
@@ -2629,7 +2664,7 @@ FDF_EXPORT namespace fdf
             return Combine(other, fileCommentCombineStrategy);
         }
         template<auto OTHER_ERROR_CALLBACK>
-        constexpr bool Combine(const IO<OTHER_ERROR_CALLBACK>& other, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseNewIfExistingIsEmpty) noexcept
+        [[nodiscard]] constexpr bool Combine(const IO<OTHER_ERROR_CALLBACK>& other, CommentCombineStrategy fileCommentCombineStrategy = CommentCombineStrategy::UseNewIfExistingIsEmpty) noexcept
         {
         #if !FDF_NO_COMMENTS
             switch(fileCommentCombineStrategy)
@@ -2668,7 +2703,7 @@ FDF_EXPORT namespace fdf
         #endif
         }
         template<Style STYLE = {}>
-        inline bool WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) const noexcept
+        [[nodiscard]] inline bool WriteToFile(std::filesystem::path filepath, bool bCreateIfNotExists = true) const noexcept
         {
             if(!std::filesystem::exists(filepath))
             {
@@ -2707,48 +2742,50 @@ FDF_EXPORT namespace fdf
         { 
             std::conditional_t<IS_CONST, const std::vector<Entry>&, std::vector<Entry>&> entries;
             const size_t index = static_cast<size_t>(-1);
+
+            [[nodiscard]] constexpr bool IsMutable() const noexcept  { return !IS_CONST; }
             
-                  Entry& operator*()        noexcept REQ  { return index != -1?  entries[index] :  Entry::INVALID; }
-            const Entry& operator*()  const noexcept      { return index != -1?  entries[index] :  Entry::INVALID; }
-                  Entry* operator->()       noexcept REQ  { return index != -1? &entries[index] : &Entry::INVALID; }
-            const Entry* operator->() const noexcept      { return index != -1? &entries[index] : &Entry::INVALID; }
+            [[nodiscard]] constexpr       Entry& operator*()        noexcept REQ  { return index != -1?  entries[index] :  Entry::INVALID; }
+            [[nodiscard]] constexpr const Entry& operator*()  const noexcept      { return index != -1?  entries[index] :  Entry::INVALID; }
+                          constexpr       Entry* operator->()       noexcept REQ  { return index != -1? &entries[index] : &Entry::INVALID; }
+                          constexpr const Entry* operator->() const noexcept      { return index != -1? &entries[index] : &Entry::INVALID; }
 
-                  Entry& Get()       noexcept REQ  { return index != -1?  entries[index] :  Entry::INVALID; }
-            const Entry& Get() const noexcept      { return index != -1?  entries[index] :  Entry::INVALID; }
+            [[nodiscard]] constexpr       Entry& Get()       noexcept REQ  { return index != -1?  entries[index] :  Entry::INVALID; }
+            [[nodiscard]] constexpr const Entry& Get() const noexcept      { return index != -1?  entries[index] :  Entry::INVALID; }
 
-            constexpr auto Iterator()               noexcept REQ  { return Span() | ChildFilter()                    | Wrap(); }
-            constexpr auto Iterator()         const noexcept      { return Span() | ChildFilter()                    | Wrap(); }
-            constexpr auto TopLevelIterator()       noexcept REQ  { return Span() | ChildFilter() | TopLevelFilter() | Wrap(); }
-            constexpr auto TopLevelIterator() const noexcept      { return Span() | ChildFilter() | TopLevelFilter() | Wrap(); }
+            [[nodiscard]] constexpr auto Iterator()               noexcept REQ  { return Span() | ChildFilter()                    | Wrap(); }
+            [[nodiscard]] constexpr auto Iterator()         const noexcept      { return Span() | ChildFilter()                    | Wrap(); }
+            [[nodiscard]] constexpr auto TopLevelIterator()       noexcept REQ  { return Span() | ChildFilter() | TopLevelFilter() | Wrap(); }
+            [[nodiscard]] constexpr auto TopLevelIterator() const noexcept      { return Span() | ChildFilter() | TopLevelFilter() | Wrap(); }
 
-            constexpr size_t GetEntryCount()         const noexcept  { return entries[index].IsContainer()? entries[index].data.u[0] : 0; }
-            constexpr size_t GetTopLevelEntryCount() const noexcept  { return entries[index].IsContainer()? entries[index].size : 0; }
+            [[nodiscard]] constexpr size_t GetEntryCount()         const noexcept  { return entries[index].IsContainer()? entries[index].data.u[0] : 0; }
+            [[nodiscard]] constexpr size_t GetTopLevelEntryCount() const noexcept  { return entries[index].IsContainer()? entries[index].size : 0; }
 
         public:
             // Call const versions, so we don't duplicate the code
-            constexpr EntryWrapper<false> GetEntryMutable(size_t id) noexcept
+            [[nodiscard]] constexpr EntryWrapper<false> GetEntryMutable(size_t id) noexcept REQ
             {
-                return {entries, static_cast<const IO*>(this)->GetEntry(id).index};
+                return {entries, GetEntry(id).index};
             }
-            constexpr EntryWrapper<false> GetEntryMutable(std::string_view identifier) noexcept
+            [[nodiscard]] constexpr EntryWrapper<false> GetEntryMutable(std::string_view identifier) noexcept REQ
             {
-                return {entries, static_cast<const IO*>(this)->GetEntry(identifier).index};
+                return {entries, GetEntry(identifier).index};
             }
-            constexpr EntryWrapper<false> GetTopLevelEntryMutable(size_t id) noexcept
+            [[nodiscard]] constexpr EntryWrapper<false> GetTopLevelEntryMutable(size_t id) noexcept REQ
             {
-                return {entries, static_cast<const IO*>(this)->GetTopLevelEntry(id).index};
+                return {entries, GetTopLevelEntry(id).index};
             }
 
-            constexpr EntryWrapper<true> GetEntry(size_t id) const noexcept
+            [[nodiscard]] constexpr EntryWrapper<true> GetEntry(size_t id) const noexcept
             {
                 return GetEntryCount() > id? EntryWrapper<true>{entries, id + index + 1} : EntryWrapper<true>{entries};
             }
-            constexpr EntryWrapper<true> GetEntry(std::string_view identifier) const noexcept
+            [[nodiscard]] constexpr EntryWrapper<true> GetEntry(std::string_view identifier) const noexcept
             {
-                const size_t id = detail::Utils<ERROR_CALLBACK>::FindEntry(entries, identifier, std::ranges::count(identifier, '.'), index);
-                return GetEntry(id);
+                const size_t id = detail::Utils<ERROR_CALLBACK>::FindChildEntry(entries, Get().fullIdentifier, identifier, Get().depth + 1 + std::ranges::count(identifier, '.'), index + 1);
+                return entries.size() > id? EntryWrapper<true>{entries, id} : EntryWrapper<true>{entries};
             }
-            constexpr EntryWrapper<true> GetTopLevelEntry(size_t id) const noexcept
+            [[nodiscard]] constexpr EntryWrapper<true> GetTopLevelEntry(size_t id) const noexcept
             {
                 size_t currentTopLevelCount = 0;
                 for(size_t i = index + 1; i < entries.size() && currentTopLevelCount < GetTopLevelEntryCount(); i++)
@@ -2781,39 +2818,39 @@ FDF_EXPORT namespace fdf
         constexpr auto Wrap() const noexcept  { return std::views::transform([this](const Entry& e) { return EntryWrapper<true >{entries, static_cast<size_t>(&e - entries.data())}; }); }
 
     public:
-        constexpr auto Iterator()               noexcept  { return entries                    | Wrap(); }
-        constexpr auto Iterator()         const noexcept  { return entries                    | Wrap(); }
-        constexpr auto TopLevelIterator()       noexcept  { return entries | TopLevelFilter() | Wrap(); }
-        constexpr auto TopLevelIterator() const noexcept  { return entries | TopLevelFilter() | Wrap(); }
+        [[nodiscard]] constexpr auto Iterator()               noexcept  { return entries                    | Wrap(); }
+        [[nodiscard]] constexpr auto Iterator()         const noexcept  { return entries                    | Wrap(); }
+        [[nodiscard]] constexpr auto TopLevelIterator()       noexcept  { return entries | TopLevelFilter() | Wrap(); }
+        [[nodiscard]] constexpr auto TopLevelIterator() const noexcept  { return entries | TopLevelFilter() | Wrap(); }
 
-        constexpr size_t GetEntryCount()         const noexcept  { return entries.size(); }
-        constexpr size_t GetTopLevelEntryCount() const noexcept  { return topLevelEntryCount; }
+        [[nodiscard]] constexpr size_t GetEntryCount()         const noexcept  { return entries.size(); }
+        [[nodiscard]] constexpr size_t GetTopLevelEntryCount() const noexcept  { return topLevelEntryCount; }
 
     public:
         // Call const versions, so we don't duplicate the code
-        constexpr EntryWrapper<false> GetEntryMutable(size_t id) noexcept
+        [[nodiscard]] constexpr EntryWrapper<false> GetEntryMutable(size_t id) noexcept
         {
-            return {entries, static_cast<const IO*>(this)->GetEntry(id).index};
+            return {entries, GetEntry(id).index};
         }
-        constexpr EntryWrapper<false> GetEntryMutable(std::string_view identifier) noexcept
+        [[nodiscard]] constexpr EntryWrapper<false> GetEntryMutable(std::string_view identifier) noexcept
         {
-            return {entries, static_cast<const IO*>(this)->GetEntry(identifier).index};
+            return {entries, GetEntry(identifier).index};
         }
-        constexpr EntryWrapper<false> GetTopLevelEntryMutable(size_t id) noexcept
+        [[nodiscard]] constexpr EntryWrapper<false> GetTopLevelEntryMutable(size_t id) noexcept
         {
-            return {entries, static_cast<const IO*>(this)->GetTopLevelEntry(id).index};
+            return {entries, GetTopLevelEntry(id).index};
         }
 
-        constexpr EntryWrapper<true> GetEntry(size_t id) const noexcept
+        [[nodiscard]] constexpr EntryWrapper<true> GetEntry(size_t id) const noexcept
         {
             return GetEntryCount() > id? EntryWrapper<true>{entries, id} : EntryWrapper<true>{entries};
         }
-        constexpr EntryWrapper<true> GetEntry(std::string_view identifier) const noexcept
+        [[nodiscard]] constexpr EntryWrapper<true> GetEntry(std::string_view identifier) const noexcept
         {
             const size_t id = detail::Utils<ERROR_CALLBACK>::FindEntry(entries, identifier, std::ranges::count(identifier, '.'), 0);
             return GetEntry(id);
         }
-        constexpr EntryWrapper<true> GetTopLevelEntry(size_t id) const noexcept
+        [[nodiscard]] constexpr EntryWrapper<true> GetTopLevelEntry(size_t id) const noexcept
         {
             size_t currentTopLevelCount = 0;
             for(size_t i = 0; i < entries.size() && currentTopLevelCount < GetTopLevelEntryCount(); i++)
