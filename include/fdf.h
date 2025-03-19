@@ -2,6 +2,7 @@
 // TODO: Maybe add an option to lazily evaluate? (store every value as a string and don't process anything until requested)
 // TODO: Maybe add some kind of enum type (to file format)
 // TODO: Maybe allow compact bool with std::bitset?
+// TODO: Maybe don't store full identifier on each Entry and only store their identifier?
 // TODO: Add API to read/modify data
 // TODO: Look into error callback. Can we make it better?
 
@@ -794,7 +795,7 @@ namespace fdf::detail
             if(nextQuote == std::string_view::npos)
                 return TokenType::Invalid;  // Non matching quotes
 
-            while(content[nextQuote - 1] == '\\')
+            while(content[nextQuote - 1] == '\\' && content[nextQuote - 2] != '\\')
             {
                 nextQuote = content.find_first_of(content[index], nextQuote + 1);
                 if(nextQuote == std::string_view::npos)
@@ -1798,34 +1799,74 @@ namespace fdf::detail
             {
                 entry.size = view.size() - 2;
                 entry.type = Type::String;
+
+                const size_t start = 1;
+                const size_t end = view.size() - 1;
+
+                auto isEscapableChar     = [](char c) -> bool  { return c == '\"' || c == '\'' || c == '\\'; };
+                auto isMergeEscapeChar   = [](char c) -> bool  { return c == 'n'  || c == 'r'  || c == 't' || c == 'v' || c == 'b' || c == 'f' || c == 'a'; };
+                auto isUnicodeEscapeChar = [](char c) -> bool  { return c == 'u'  || c == 'U'; };  // TODO: Maybe handle unicode?
+
+                auto convertMergedEscapeChar = [](char c) -> char
+                {
+                    if(c == 'n')
+                        return '\n';
+                    if(c == 'r')
+                        return '\r';
+                    if(c == 't')
+                        return '\t';
+                    if(c == 'v')
+                        return '\v';
+                    if(c == 'b')
+                        return '\b';
+                    if(c == 'f')
+                        return '\f';
+                    if(c == 'a')
+                        return '\a';
+                    return c;
+                };
     
                 size_t escapeCharacters = 0;
                 if(view.size() < VARIANT_DYNAMIC_STRING_HARD_LIMIT)
                 {
-                    for(int i = 1; i <= entry.size; i++)
+                    for(int i = start; i < end; i++)
                     {
-                        if(view[i + escapeCharacters] == '\\')
+                        if(view[i] == '\\' && i + 1 < end && (isEscapableChar(view[i + 1]) || isMergeEscapeChar(view[i + 1])))
                         {
+                            i++;
                             entry.size--;
-                            escapeCharacters++;
+
+                            if(isEscapableChar(view[i]))
+                                writeCharacter(view[i]);
+                            else
+                                writeCharacter(convertMergedEscapeChar(view[i]));
                         }
-    
-                        writeCharacter(view[i + escapeCharacters]);
+                        else
+                        {
+                            writeCharacter(view[i]);
+                        }
                     }
                     writeCharacter('\0');
                 }
                 else
                 {
                     entry.data.strDynamic.InitialAllocate(entry.size + 1);
-                    for(int i = 1; i <= entry.size; i++)
+                    for(int i = start; i < end; i++)
                     {
-                        if(view[i + escapeCharacters] == '\\')
+                        if(view[i] == '\\' && i + 1 < end && (isEscapableChar(view[i + 1]) || isMergeEscapeChar(view[i + 1])))
                         {
+                            i++;
                             entry.size--;
-                            escapeCharacters++;
+
+                            if(isEscapableChar(view[i]))
+                                writeDynamicCharacter(view[i]);
+                            else
+                                writeDynamicCharacter(convertMergedEscapeChar(view[i]));
                         }
-    
-                        writeDynamicCharacter(view[i + escapeCharacters]);
+                        else
+                        {
+                            writeDynamicCharacter(view[i]);
+                        }
                     }
     
                     writeDynamicCharacter('\0');

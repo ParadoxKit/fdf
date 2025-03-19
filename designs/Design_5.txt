@@ -140,6 +140,8 @@ escaped1="She said, \"Hello.\""
 escaped2='She said, \'Hello.\''
 escaped3='She said, "Hello."'
 escaped4="She said, 'Hello.'"
+escaped5="asd\tasd\p"  // This should end up as "asd    asd\p"
+escaped6="\\asd\\"     // This should end up as "\asd\"
 
 name3="Test"
 foo5=3.14

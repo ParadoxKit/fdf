@@ -265,10 +265,10 @@ namespace fdf::detail
 
 
             {
-                std::println("          Entry Count: {:>3} (should be 133) (update when editing design file)", io.GetEntryCount());
-                std::println("Top Level Entry Count: {:>3} (should be  54) (update when editing design file)", io.GetTopLevelEntryCount());
+                std::println("          Entry Count: {:>3} (should be 135) (update when editing design file)", io.GetEntryCount());
+                std::println("Top Level Entry Count: {:>3} (should be  56) (update when editing design file)", io.GetTopLevelEntryCount());
 
-                if(io.GetEntryCount() != 133 || io.GetTopLevelEntryCount() != 54)
+                if(io.GetEntryCount() != 135 || io.GetTopLevelEntryCount() != 56)
                 {
                     bResult = false;
                     std::puts("[ERROR]: Invalid 'Entry Count' or 'Top Level Entry Count'");
@@ -433,6 +433,70 @@ namespace fdf::detail
                 if(entry->type == Type::Invalid)
                 {
                     std::puts("<NON_EXISTING>");
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
+                auto entry = io.GetEntry("escaped1");
+                std::print("{:<24}  ->  ", "escaped1");
+                if(entry->type == Type::String)
+                {
+                    auto val = entry->GetValue<std::string_view>();
+                    std::println("{}", val);
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
+                auto entry = io.GetEntry("escaped2");
+                std::print("{:<24}  ->  ", "escaped2");
+                if(entry->type == Type::String)
+                {
+                    auto val = entry->GetValue<std::string_view>();
+                    std::println("{}", val);
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
+                auto entry = io.GetEntry("escaped5");
+                std::print("{:<24}  ->  ", "escaped5");
+                if(entry->type == Type::String)
+                {
+                    auto val = entry->GetValue<std::string_view>();
+                    std::println("{}", val);
+                }
+                else
+                {
+                    bResult = false;
+                    std::puts("<ERROR>");
+                }
+            }
+
+
+            {
+                auto entry = io.GetEntry("escaped6");
+                std::print("{:<24}  ->  ", "escaped6");
+                if(entry->type == Type::String)
+                {
+                    auto val = entry->GetValue<std::string_view>();
+                    std::println("{}", val);
                 }
                 else
                 {
